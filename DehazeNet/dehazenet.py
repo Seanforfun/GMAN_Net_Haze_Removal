@@ -11,6 +11,7 @@ import re
 import sys
 
 FLAGS = tf.app.flags.FLAGS
+RGB_CHANNEL = 3;
 
 # Basic model parameters.
 tf.app.flags.DEFINE_integer('batch_size', 128,
@@ -19,6 +20,10 @@ tf.app.flags.DEFINE_integer('input_image_height', 128,
                             """Input image height.""")
 tf.app.flags.DEFINE_integer('input_image_width', 128,
                             """Input image width.""")
+tf.app.flags.DEFINE_integer('original_height', 100000,
+                            """Input image original height.""")
+tf.app.flags.DEFINE_integer('original_width', 100000,
+                            """Input image original width.""")
 tf.app.flags.DEFINE_string('haze_test_images_dir', './HazeImages/TestImages',
                            """Path to the hazed test images directory.""")
 tf.app.flags.DEFINE_string('haze_train_images_dir', './HazeImages/TrainImages',
