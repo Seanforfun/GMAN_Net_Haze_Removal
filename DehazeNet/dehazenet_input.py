@@ -40,17 +40,17 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
             file_names.append(file_name)
             current_image = Image(path=file_name)
             current_image.key = id(current_image)
+            current_image.image_index = image_filename[0:IMAGE_INDEX_BIT]
             image_list.append(current_image)
             # Put all clear images into dictionary
             if clear_image:
                 if len(image_filename) < IMAGE_INDEX_BIT + 4:
                     raise RuntimeError("Incorrect image name: " + image_filename)
-                image_index = image_filename[0:IMAGE_INDEX_BIT]
-                clear_dict[image_index] = current_image
+                clear_dict[current_image.image_index] = current_image
     return file_names, image_list, clear_dict
 
 
-def read_image(image_list, file_names=None):
+def _read_image(image_list, file_names=None):
     """
     :param image_list: A image list which saves the image objects
     :param file_names: A file name list(Optional)
@@ -70,7 +70,7 @@ def read_image(image_list, file_names=None):
     return image_list
 
 
-def get_distorted_image(image_batch_list, height, width, file_names=None):
+def _get_distorted_image(image_batch_list, height, width, file_names=None):
     """
     :param batch_list: A list used to save a batch of image objects
     :param height: The height of our training image
@@ -86,14 +86,13 @@ def get_distorted_image(image_batch_list, height, width, file_names=None):
                 raise ValueError('Failed to find image: ' + image.path)
         image_batch = []
         #image_batch_list
-        image_batch = read_image(image_batch_list)
+        image_batch = _read_image(image_batch_list)
         # TODO Image pre-processing
         for image in image_batch:
             if image.image_matrix is None:
                 raise RuntimeError("Failed to read image: " + image.path)
             image.image_matrix = tf.random_crop(
-                image.image_matrix, [dehazenet.FLAGS.input_image_height,
-                                     dehazenet.FLAGS.input_image_width, 3])
+                image.image_matrix, [height, width, dehazenet.RGB_CHANNEL])
             image.image_matrix = tf.image.random_brightness(image.image_matrix,
                                                          max_delta=63)
             image.image_matrix = tf.image.random_contrast(image.image_matrix,
@@ -103,14 +102,37 @@ def get_distorted_image(image_batch_list, height, width, file_names=None):
         raise RuntimeError('Error input of method distorted_image')
 
 
+def get_image_batch(epoch_index, batch_size, input_img_list, clear_dict):
+    image_input_batch = []
+    image_truthground_batch = []
+    index = (epoch_index - 1) * batch_size
+    image_batch_list = input_img_list[index:index+batch_size]
+    image_input_obj_batch = _get_distorted_image(image_batch_list, dehazenet.FLAGS.input_image_height,
+                                            dehazenet.FLAGS.input_image_width)
+    for img in image_input_obj_batch:
+        image_input_batch.append(img.image_matrix)
+    image_truthground_list = []
+    for image in image_input_obj_batch:
+            # Find corresponding clear image object and add them into image_truthground_list
+        clear_image = clear_dict[image.image_index]
+        image_truthground_list.append(clear_image)
+    image_truthground_obj_batch = _get_distorted_image(image_truthground_list, dehazenet.FLAGS.input_image_height,
+                                                  dehazenet.FLAGS.input_image_width)
+    for img in image_truthground_obj_batch:
+        image_truthground_batch.append(img.image_matrix)
+    return image_input_batch, image_truthground_batch
+
+
 if __name__ == '__main__':
-    a = []
-    # np.random.shuffle(a)
-    # print(a)
-    names = []
-    dict = {}
-    list=[]
-    list, t, dict = image_input("./ClearImages", names, list, clear_dict=None,clear_image=False)
-    print(t)
-    image_list_shuffle(t)
-    print(t)
+    # Unit test
+    file_names = []
+    image_list=[]
+    clear_dict = {}
+    file_names, image_list, clear_dict = image_input("./ClearImages", file_names, image_list, clear_dict=clear_dict,clear_image=True)
+    image_list_shuffle(image_list)
+    print(file_names)
+    print(image_list)
+    print(clear_dict)
+    image_list = _read_image(image_list)
+    for img in image_list:
+        print(tf.size(img.image_matrix))
