@@ -1,10 +1,14 @@
 #  ====================================================
 #   Filename: dehazenet.py
-#   Function:
+#   Function: This file is entrance of the dehazenet.
+#   Most of the parameters are defined in this file.
 #  ====================================================
 import tensorflow as tf
-
 import dehazenet_input as di
+import dehazenet_tools as dt
+import dehazenet_eval as de
+import dehazenet as dn
+import numpy as np
 
 import os
 import re
@@ -12,6 +16,13 @@ import sys
 
 FLAGS = tf.app.flags.FLAGS
 RGB_CHANNEL = 3;
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
+
+# Constants describing the training process.
+MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
+NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
+LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
+INITIAL_LEARNING_RATE = 0.1       # Initial learning rate.
 
 # Basic model parameters.
 tf.app.flags.DEFINE_integer('batch_size', 128,
@@ -32,3 +43,25 @@ tf.app.flags.DEFINE_string('clear_train_images_dir', './ClearImages/TrainImages'
                            """Path to the clear train images directory.""")
 tf.app.flags.DEFINE_string('clear_result_images_dir', './ClearImages/ResultImages',
                            """Path to the clear result images directory.""")
+
+
+# Some systematic parameters
+tf.app.flags.DEFINE_string('train_dir', './DeHazeNetEventLog',
+                           """Directory where to write event logs """
+                           """and checkpoint.""")
+tf.app.flags.DEFINE_integer('max_steps', 1000000,
+                            """Number of batches to run.""")
+tf.app.flags.DEFINE_integer('num_gpus', 1,
+                            """How many GPUs to use.""")
+tf.app.flags.DEFINE_integer('num_cpus', 1,
+                            """How many CPUs to use.""")
+tf.app.flags.DEFINE_boolean('log_device_placement', False,
+                            """Whether to log device placement.""")
+
+
+def main():
+    pass
+
+
+if __name__ == '__main__':
+    tf.app.run()
