@@ -8,6 +8,7 @@ import dehazenet_input as di
 import dehazenet_tools as dt
 import dehazenet_eval as de
 import dehazenet as dn
+import dehazenet_multi_gpu_train as dmgt
 import numpy as np
 
 import os
@@ -65,8 +66,7 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
 
 
 def main():
-    pass
-
+    dmgt.train()
 
 if __name__ == '__main__':
     tf.app.run()
