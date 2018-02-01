@@ -12,19 +12,40 @@ import numpy as np
 
 
 # Frames used to save clear training image information
-__clear_train_file_names = []
-__clear_train_img_list = []
-__clear_train_directory = {}
+_clear_train_file_names = []
+_clear_train_img_list = []
+_clear_train_directory = {}
 # Frames used to save hazed training image information
-__hazed_train_file_names = []
-__hazed_train_img_list = []
+_hazed_train_file_names = []
+_hazed_train_img_list = []
 
 
-def _inference():
-    pass
+def _inference(hazed_batch):
+    """
+    :param hazed_batch: The hazed training images from get_distorted_image
+    :return: A image batch after trained by CNN
+    """
+    # TODO Lida Xu please re-write the CNN model
+    return 0
 
 
-def _tower_loss(scope, images):
+def _loss(result_batch, clear_image_batch):
+    """
+    :param result_batch: A batch of image that been processed by out CNN
+    :param clear_image_batch: The ground truth image to compare with result_batch
+    :return: The loss value will be added to tensorflow graph, return is actually not necessary
+    but is left here to show respect to CIFAR-10 source code
+    """
+    # TODO Lida Xu please redesign this function to achieve a better representation of loss
+    loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch)))
+    tf.add_to_collection('losses', loss)
+
+    # The total loss is defined as the cross entropy loss plus all of the weight
+    # decay terms (L2 loss).
+    return tf.add_n(tf.get_collection('losses'), name='total_loss')
+
+
+def _tower_loss(scope, hazed_batch, clear_batch):
     """Calculate the total loss on a single tower running the DeHazeNet model.
 
       Args:
@@ -34,8 +55,10 @@ def _tower_loss(scope, images):
       Returns:
          Tensor of shape [] containing the total loss for a batch of data
       """
-    _inference(images)
-    pass
+    # Put our hazed images into designed CNN and get a result image batch
+    logist = _inference(hazed_batch)
+    _ = _loss(logist, clear_batch)
+    return tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 
 def train():
@@ -60,13 +83,29 @@ def train():
 
         # Image pre-process
         # Clear training image pre-process
-        di.image_input(dn.FLAGS.clear_train_images_dir, __clear_train_file_names, __clear_train_img_list, __clear_train_directory, clear_image=True)
-        # Hazed training image pre-process and shuffle
-        di.image_input(dn.FLAGS.haze_train_images_dir, __hazed_train_file_names, __hazed_train_img_list,
+        di.image_input(dn.FLAGS.clear_train_images_dir, _clear_train_file_names, _clear_train_img_list,
+                       _clear_train_directory, clear_image=True)
+        # Hazed training image pre-process
+        di.image_input(dn.FLAGS.haze_train_images_dir, _hazed_train_file_names, _hazed_train_img_list,
                        clear_dict=None, clear_image=False)
-        _ = di.image_list_shuffle(__hazed_train_img_list)
+        # Get queues for training image and ground truth, which is internally multi-thread safe
+        hazed_image_queue, clear_image_queue = di.get_distorted_image(_hazed_train_img_list, dn.FLAGS.input_image_height,
+                                                                      dn.FLAGS.input_image_width)
+        batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
+            [hazed_image_queue, clear_image_queue], capacity=2 * dn.FLAGS.num_gpus)
 
-        # Dequeue from the image list
+        # Calculate the gradients for each model tower.
+        tower_grads = []
+        with tf.variable_scope(tf.get_variable_scope()):
+            for i in range(dn.FLAGS.num_gpus):
+                with tf.device('/gpu:%d' % i):
+                    with tf.name_scope('%s_%d' % (dn.TOWER_NAME, i)) as scope:
+                        # Dequeues one batch for the GPU
+                        hazed_image_batch, clear_image_batch = batch_queue.dequeue()
+                        # Calculate the loss for one tower of the dehazenet model. This function
+                        # constructs the entire dehazenet model but shares the variables across
+                        # all towers.
+                        loss = _tower_loss(scope, hazed_image_batch, clear_image_batch)
 
 
 if __name__ == '__main__':
