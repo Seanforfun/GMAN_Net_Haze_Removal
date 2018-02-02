@@ -1,22 +1,75 @@
 #  ====================================================
 #   Filename: dehazenet_tools.py
 #   Author: Zheng Liu
-#   Function: This file contains the tools used to create CNN.
+#   Reviser: Seanforfun
+#   Function: This file contains the tools used to
+#   create CNN.
+#   We instantiate all variables using tf.get_variable()
+#   instead of tf.Variable() in order to share variables
+#   across multiple GPU training runs. If we only ran
+#   this model on a single GPU, we could simplify this
+#   function by replacing all instances of
+#   tf.get_variable() with tf.Variable().
 #  ====================================================
 
 import tensorflow as tf
 import numpy as np
+import dehazenet as dn
+
+
+def _variable_on_cpu(name, shape, initializer):
+    """Helper to create a Variable stored on CPU memory.
+
+    Args:
+    name: name of the variable
+    shape: list of ints
+    initializer: initializer for Variable
+
+    Returns:
+    Variable Tensor
+    """
+    with tf.device('/cpu:0'):
+        dtype = tf.float16 if dn.FLAGS.use_fp16 else tf.float32
+        var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
+    return var
+
+
+def _variable_with_weight_decay(name, shape, stddev, wd):
+    # TODO Need to determine a variable initialization method, currently we use normal
+    """Helper to create an initialized Variable with weight decay.
+
+    Note that the Variable is initialized with a truncated normal distribution.
+    A weight decay is added only if one is specified.
+
+    Args:
+      name: name of the variable
+      shape: list of ints
+      stddev: standard deviation of a truncated Gaussian
+      wd: add L2Loss weight decay multiplied by this float. If None, weight
+          decay is not added for this Variable.
+
+    Returns:
+      Variable Tensor
+    """
+    dtype = tf.float16 if dn.FLAGS.use_fp16 else tf.float32
+    var = _variable_on_cpu(
+        name,
+        shape,
+        tf.truncated_normal_initializer(stddev=stddev, dtype=dtype))
+    if wd is not None:
+        weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
+        tf.add_to_collection('losses', weight_decay)
+    return var
 
 
 def conv(layer_name, x, out_channels, kernel_size=[3, 3], stride=[1, 1, 1, 1]):
     in_channels = x.get_shape()[-1]
     with tf.variable_scope(layer_name):
-        w = tf.get_variable(name='weights',
-                            shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
-                            initializer=tf.contrib.layers.xavier_initializer())  # default is uniform distribution initialization
-        b = tf.get_variable(name='biases',
-                            shape=[out_channels],
-                            initializer=tf.constant_initializer(0.0))
+        w = _variable_with_weight_decay(name='weights',
+                                             shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
+                                             stddev=5e-2, wd=0.0)
+        b = _variable_on_cpu(name='biases', shape=[out_channels],
+                             initializer=tf.constant_initializer(0.0))
         x = tf.nn.conv2d(x, w, stride, padding='SAME', name='conv')
         x = tf.nn.bias_add(x, b, name='bias_add')
         x = tf.nn.relu(x, name='relu')
@@ -88,3 +141,8 @@ def bias(bias_shape):
                         shape=bias_shape,
                         initializer=tf.constant_initializer(0.0))
     return b
+
+
+if __name__ == '__main__':
+    a = tf.placeholder(tf.float32, shape=[1, 2, 3, 4]);
+    print(a.get_shape()[-1])

@@ -28,7 +28,7 @@ def _inference(hazed_batch):
     """
     :param hazed_batch: The hazed training images from get_distorted_image.
     Each image is in the form of Images. 4D tensor of [batch_size, height, width, 3] size
-    Please refer to CIFAR-10 CNN model to design our dehazenet
+    Please refer to CIFAR-10 CNN model to design our dehazenet.
     :return: A image batch after trained by CNN
     """
     # TODO Lida Xu please re-write the CNN model

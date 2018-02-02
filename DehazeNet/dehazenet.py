@@ -30,6 +30,12 @@ INITIAL_LEARNING_RATE = 0.1       # Initial learning rate.
 # names of the summaries when visualizing a model.
 TOWER_NAME = 'tower'
 
+# Dehazenet actually doesn't require very high float data accuracy,
+# so fp16 is normally set False
+# TODO Need to be discussed
+tf.app.flags.DEFINE_boolean('use_fp16', False,
+                            """Train the model using fp16.""")
+
 # Basic model parameters.
 tf.app.flags.DEFINE_integer('batch_size', 128,
                             """Number of images to process in a batch.""")
