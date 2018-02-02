@@ -58,7 +58,7 @@ tf.app.flags.DEFINE_string('clear_result_images_dir', './ClearImages/ResultImage
 
 
 # Some systematic parameters
-tf.app.flags.DEFINE_string('train_dir', './DeHazeNetEventLog',
+tf.app.flags.DEFINE_string('train_dir', './DeHazeNetModel',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 tf.app.flags.DEFINE_integer('max_steps', 1000000,

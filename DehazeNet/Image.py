@@ -6,10 +6,10 @@ import numpy as np
 
 
 class Image(object):
-    def __init__(self, path, key=None, image_matrix=None, image_index=None):
+    def __init__(self, path, key=None, image_tensor=None, image_index=None):
         self.path = path
         self.key = key
-        self.image_matrix = image_matrix
+        self.image_tensor = image_tensor
         self.image_index = image_index
 
 

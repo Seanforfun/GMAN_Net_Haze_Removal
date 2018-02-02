@@ -62,8 +62,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
     return var
 
 
-def conv(layer_name, x, out_channels, kernel_size=[3, 3], stride=[1, 1, 1, 1]):
-    in_channels = x.get_shape()[-1]
+def conv(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1, 1, 1]):
     with tf.variable_scope(layer_name):
         w = _variable_with_weight_decay(name='weights',
                                              shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],

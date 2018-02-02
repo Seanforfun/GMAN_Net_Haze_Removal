@@ -143,12 +143,16 @@ def train():
         # Clear training image pre-process
         di.image_input(dn.FLAGS.clear_train_images_dir, _clear_train_file_names, _clear_train_img_list,
                        _clear_train_directory, clear_image=True)
+        if len(_clear_train_img_list) == 0:
+            raise RuntimeError("No image found! Please supply clear images for training or eval ")
         # Hazed training image pre-process
         di.image_input(dn.FLAGS.haze_train_images_dir, _hazed_train_file_names, _hazed_train_img_list,
                        clear_dict=None, clear_image=False)
+        if len(_hazed_train_img_list) == 0:
+            raise RuntimeError("No image found! Please supply hazed images for training or eval ")
         # Get queues for training image and ground truth, which is internally multi-thread safe
         hazed_image_queue, clear_image_queue = di.get_distorted_image(_hazed_train_img_list, dn.FLAGS.input_image_height,
-                                                                      dn.FLAGS.input_image_width)
+                                                                      dn.FLAGS.input_image_width, _clear_train_directory)
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [hazed_image_queue, clear_image_queue], capacity=2 * dn.FLAGS.num_gpus)
 
