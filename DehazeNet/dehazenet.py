@@ -3,6 +3,7 @@
 #   Function: This file is entrance of the dehazenet.
 #   Most of the parameters are defined in this file.
 #  ====================================================
+
 import tensorflow as tf
 import dehazenet_input as di
 import dehazenet_tools as dt
@@ -47,14 +48,10 @@ tf.app.flags.DEFINE_integer('original_height', 100000,
                             """Input image original height.""")
 tf.app.flags.DEFINE_integer('original_width', 100000,
                             """Input image original width.""")
-tf.app.flags.DEFINE_string('haze_test_images_dir', './HazeImages/TestImages',
-                           """Path to the hazed test images directory.""")
 tf.app.flags.DEFINE_string('haze_train_images_dir', './HazeImages/TrainImages',
                            """Path to the hazed train images directory.""")
 tf.app.flags.DEFINE_string('clear_train_images_dir', './ClearImages/TrainImages',
                            """Path to the clear train images directory.""")
-tf.app.flags.DEFINE_string('clear_result_images_dir', './ClearImages/ResultImages',
-                           """Path to the clear result images directory.""")
 
 
 # Some systematic parameters
@@ -65,13 +62,14 @@ tf.app.flags.DEFINE_integer('max_steps', 1000000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
-tf.app.flags.DEFINE_integer('num_cpus', 1,
-                            """How many CPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
 
 
 def main():
+    if tf.gfile.Exists(FLAGS.train_dir):
+        tf.gfile.DeleteRecursively(FLAGS.train_dir)
+    tf.gfile.MakeDirs(FLAGS.train_dir)
     dmgt.train()
 
 

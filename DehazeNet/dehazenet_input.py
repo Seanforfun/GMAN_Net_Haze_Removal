@@ -99,10 +99,11 @@ def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_si
     return h_images, c_images
 
 
-def _image_pre_process(image, height, width):
+def _image_pre_process(image, height, width, train=True):
     image = tf.cast(image, tf.float32)
-    image = tf.image.random_brightness(image, max_delta=63)
-    image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+    if train:
+        image = tf.image.random_brightness(image, max_delta=63)
+        image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
     # Subtract off the mean and divide by the variance of the pixels.
     image = tf.image.per_image_standardization(image)
     # Resize the input image
@@ -122,7 +123,7 @@ def _find_corres_clear_image(image, clear_dict):
     return tensor
 
 
-def get_distorted_image(image_batch_list, height, width, dict, file_names=None):
+def get_distorted_image(image_batch_list, height, width, dict, Train=True, file_names=None):
     """
     :param image_batch_list: A list used to save a batch of image objects
     :param height: The height of our training image
@@ -152,7 +153,7 @@ def get_distorted_image(image_batch_list, height, width, dict, file_names=None):
             print('Filling queue with %d images before starting to train. '
                   'This will take a few minutes.' % min_queue_examples)
         return _generate_image_batch(image.image_tensor, clear_image, min_queue_examples, dehazenet.FLAGS.batch_size,
-                                     shuffle=True)
+                                     shuffle=Train)
     else:
         raise RuntimeError('Error input of method distorted_image')
 

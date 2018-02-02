@@ -23,6 +23,10 @@ _clear_train_directory = {}
 _hazed_train_file_names = []
 _hazed_train_img_list = []
 
+# Some Strings
+PROGRAM_START = "You shoot me down but I won't fall , I am titanium."
+PROGRAM_END = "We don't talk anymore."
+
 
 def _inference(hazed_batch):
     """
@@ -120,6 +124,7 @@ def _average_gradients(tower_grads):
 
 
 def train():
+    print(PROGRAM_START)
     # Create all dehazenet information in /cpu:0
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         # Create a variable to count the number of train() calls. This equals the
@@ -250,6 +255,7 @@ def train():
             if step % 1000 == 0 or (step + 1) == dn.FLAGS.max_steps:
                 checkpoint_path = os.path.join(dn.FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
+    print(PROGRAM_END)
 
 
 if __name__ == '__main__':
