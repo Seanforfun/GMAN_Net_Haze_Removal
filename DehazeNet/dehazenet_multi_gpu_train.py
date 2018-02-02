@@ -247,6 +247,7 @@ def train():
                 checkpoint_path = os.path.join(dn.FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
 
+
 if __name__ == '__main__':
     a = 10
     b = 3

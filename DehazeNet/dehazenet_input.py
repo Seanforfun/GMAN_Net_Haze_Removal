@@ -18,6 +18,7 @@ import dehazenet as dehazenet
 IMAGE_INDEX_BIT = 4
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 50000
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
+IMAGE_SUFFIX_MIN_LENGTH = 4
 
 
 def image_list_shuffle(image_list):
@@ -47,7 +48,7 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
             image_list.append(current_image)
             # Put all clear images into dictionary
             if clear_image:
-                if len(image_filename) < IMAGE_INDEX_BIT + 4:
+                if len(image_filename) < IMAGE_INDEX_BIT + IMAGE_SUFFIX_MIN_LENGTH:
                     raise RuntimeError("Incorrect image name: " + image_filename)
                 clear_dict[current_image.image_index] = current_image
     return file_names, image_list, clear_dict
@@ -121,15 +122,15 @@ def _find_corres_clear_image(image, clear_dict):
 
 def get_distorted_image(image_batch_list, height, width, file_names=None):
     """
-    :param batch_list: A list used to save a batch of image objects
+    :param image_batch_list: A list used to save a batch of image objects
     :param height: The height of our training image
     :param width: The width of our training image
     :param file_names: A batch of images to be trained(Optional)
     :return: A batch list of Image object whose image_matrix are filled
     :function: Used to read and distort a batch of images
     """
-    if isinstance(height, int) | isinstance(width, int) \
-            | image_batch_list is not None:
+    if isinstance(height, int) & isinstance(width, int) \
+            & image_batch_list is not None:
         for image in image_batch_list:
             if not tf.gfile.Exists(image.path):
                 raise ValueError('Failed to find image: ' + image.path)

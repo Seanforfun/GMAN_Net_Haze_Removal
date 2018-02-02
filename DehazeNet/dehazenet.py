@@ -74,5 +74,6 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
 def main():
     dmgt.train()
 
+
 if __name__ == '__main__':
     tf.app.run()
