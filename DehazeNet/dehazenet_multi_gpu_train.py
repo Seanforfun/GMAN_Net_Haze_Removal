@@ -2,6 +2,9 @@
 #   Filename: dehazenet_multi_gpu_train.py
 #   Function: This file defines the training function
 #  ====================================================
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import tensorflow as tf
 import dehazenet_input as di
@@ -28,7 +31,7 @@ PROGRAM_START = "You shoot me down but I won't fall , I am titanium."
 PROGRAM_END = "We don't talk anymore."
 
 
-def _inference(hazed_batch):
+def inference(hazed_batch):
     """
     :param hazed_batch: The hazed training images from get_distorted_image.
     Each image is in the form of Images. 4D tensor of [batch_size, height, width, 3] size
@@ -39,7 +42,7 @@ def _inference(hazed_batch):
     return hazed_batch
 
 
-def _loss(result_batch, clear_image_batch):
+def loss(result_batch, clear_image_batch):
     """
     :param result_batch: A batch of image that been processed by out CNN
     :param clear_image_batch: The ground truth image to compare with result_batch
@@ -50,12 +53,12 @@ def _loss(result_batch, clear_image_batch):
     loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch)))
     tf.add_to_collection('losses', loss)
 
-    # The total loss is defined as the cross entropy loss plus all of the weight
+    # The total loss is defined as the ms loss plus all of the weight
     # decay terms (L2 loss).
     return tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 
-def _tower_loss(scope, hazed_batch, clear_batch):
+def tower_loss(scope, hazed_batch, clear_batch):
     """Calculate the total loss on a single tower running the DeHazeNet model.
 
       Args:
@@ -66,10 +69,10 @@ def _tower_loss(scope, hazed_batch, clear_batch):
          Tensor of shape [] containing the total loss for a batch of data
       """
     # Put our hazed images into designed CNN and get a result image batch
-    logist = _inference(hazed_batch)
+    logist = inference(hazed_batch)
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
-    _ = _loss(logist, clear_batch)
+    _ = loss(logist, clear_batch)
     # Assemble all of the losses for the current tower only.
     losses = tf.get_collection('losses', scope)
     # Calculate the total loss for the current tower.
@@ -82,10 +85,10 @@ def _tower_loss(scope, hazed_batch, clear_batch):
         # session. This helps the clarity of presentation on tensorboard.
         loss_name = re.sub('%s_[0-9]*/' % dn.TOWER_NAME, '', l.op.name)
         tf.summary.scalar(loss_name, l)
-    return total_loss
+    return total_loss, logist
 
 
-def _average_gradients(tower_grads):
+def average_gradients(tower_grads):
     """Calculate the average gradient for each shared variable across all towers.
 
      Note that this function provides a synchronization point across all towers.
@@ -172,7 +175,7 @@ def train():
                         # Calculate the loss for one tower of the dehazenet model. This function
                         # constructs the entire dehazenet model but shares the variables across
                         # all towers.
-                        loss = _tower_loss(scope, hazed_image_batch, clear_image_batch)
+                        loss, _ = tower_loss(scope, hazed_image_batch, clear_image_batch)
 
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
@@ -188,7 +191,7 @@ def train():
 
         # We must calculate the mean of each gradient. Note that this is the
         # synchronization point across all towers.
-        grads = _average_gradients(tower_grads)
+        grads = average_gradients(tower_grads)
         # Add a summary to track the learning rate.
         summaries.append(tf.summary.scalar('learning_rate', lr))
 

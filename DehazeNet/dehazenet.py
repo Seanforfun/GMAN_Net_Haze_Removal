@@ -3,6 +3,9 @@
 #   Function: This file is entrance of the dehazenet.
 #   Most of the parameters are defined in this file.
 #  ====================================================
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import tensorflow as tf
 import dehazenet_input as di

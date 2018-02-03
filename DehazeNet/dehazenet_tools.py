@@ -11,6 +11,9 @@
 #   function by replacing all instances of
 #   tf.get_variable() with tf.Variable().
 #  ====================================================
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
 
 import tensorflow as tf
 import numpy as np
