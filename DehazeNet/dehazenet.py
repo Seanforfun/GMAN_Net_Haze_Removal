@@ -21,7 +21,6 @@ import sys
 
 FLAGS = tf.app.flags.FLAGS
 RGB_CHANNEL = 3;
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
@@ -67,6 +66,29 @@ tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
+
+#Variables for evaluation
+tf.app.flags.DEFINE_string('eval_dir', './DeHazeNet_eval',
+                           """Directory where to write event logs.""")
+tf.app.flags.DEFINE_string('checkpoint_dir', './DeHazeNetEval',
+                           """Directory where to read model checkpoints.""")
+tf.app.flags.DEFINE_string('haze_test_images_dir', './HazeImages/TestImages',
+                           """Path to the hazed test images directory.""")
+tf.app.flags.DEFINE_string('clear_test_images_dir', './ClearImages/TestImages',
+                           """Path to the clear train images directory.""")
+tf.app.flags.DEFINE_string('clear_result_images_dir', './ClearResultImages',
+                           """Path to the hazed test images directory.""")
+
+tf.app.flags.DEFINE_boolean('eval_log_device_placement', False,
+                            """Whether to log device placement.""")
+tf.app.flags.DEFINE_integer('eval_max_steps', 1000000,
+                            """Number of batches to run.""")
+tf.app.flags.DEFINE_integer('eval_num_gpus', 1,
+                            """How many GPUs to use.""")
+tf.app.flags.DEFINE_integer('eval_input_image_height', 128,
+                            """Input image height.""")
+tf.app.flags.DEFINE_integer('eval_input_image_width', 128,
+                            """Input image width.""")
 
 
 def main():
