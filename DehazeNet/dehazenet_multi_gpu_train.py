@@ -8,9 +8,9 @@ from __future__ import print_function
 
 import tensorflow as tf
 import dehazenet_input as di
-import dehazenet_tools as dt
-import dehazenet_eval as de
+import dehazenet_flags as df
 import dehazenet as dn
+import dehazenet_tools as dt
 import numpy as np
 import re
 from datetime import datetime
@@ -39,7 +39,48 @@ def inference(hazed_batch):
     :return: A image batch after trained by CNN
     """
     # TODO Lida Xu please re-write the CNN model
-    return hazed_batch
+    with tf.name_scope('DehazeNet'):
+        x = dt.conv('conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv1_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # with tf.name_scope('pool1'):
+        #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+
+        x = dt.conv('conv2_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv2_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # with tf.name_scope('pool2'):
+        #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+
+        x = dt.conv('conv3_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv3_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv3_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # with tf.name_scope('pool3'):
+        #     x = tools.pool('pool3', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+
+        x = dt.conv('conv4_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv4_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv4_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # with tf.name_scope('pool4'):
+        #     x = tools.pool('pool4', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+
+        x = dt.conv('conv5_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv5_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv5_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # with tf.name_scope('pool5'):
+        #     x = tools.pool('pool5', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+
+        x = dt.conv('conv6_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv6_2', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # x = tools.conv('conv6_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # x = tools.FC_layer('fc6', x, out_nodes=4096)
+        # with tf.name_scope('batch_norm1'):
+        #     x = tools.batch_norm(x)
+        # x = tools.FC_layer('fc7', x, out_nodes=4096)
+        # with tf.name_scope('batch_norm2'):
+        #     x = tools.batch_norm(x)
+        # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
+
+    return x
 
 
 def loss(result_batch, clear_image_batch):
@@ -134,8 +175,8 @@ def train():
         # number of batches processed * FLAGS.num_gpus.
         global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
         # Calculate the learning rate schedule.
-        num_batches_per_epoch = (dn.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
-                                 dn.FLAGS.batch_size)
+        num_batches_per_epoch = (di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
+                                 df.FLAGS.batch_size)
         decay_steps = int(num_batches_per_epoch * dn.NUM_EPOCHS_PER_DECAY)
 
         lr = tf.train.exponential_decay(dn.INITIAL_LEARNING_RATE,
@@ -149,25 +190,25 @@ def train():
 
         # Image pre-process
         # Clear training image pre-process
-        di.image_input(dn.FLAGS.clear_train_images_dir, _clear_train_file_names, _clear_train_img_list,
+        di.image_input(df.FLAGS.clear_train_images_dir, _clear_train_file_names, _clear_train_img_list,
                        _clear_train_directory, clear_image=True)
         if len(_clear_train_img_list) == 0:
             raise RuntimeError("No image found! Please supply clear images for training or eval ")
         # Hazed training image pre-process
-        di.image_input(dn.FLAGS.haze_train_images_dir, _hazed_train_file_names, _hazed_train_img_list,
+        di.image_input(df.FLAGS.haze_train_images_dir, _hazed_train_file_names, _hazed_train_img_list,
                        clear_dict=None, clear_image=False)
         if len(_hazed_train_img_list) == 0:
             raise RuntimeError("No image found! Please supply hazed images for training or eval ")
         # Get queues for training image and ground truth, which is internally multi-thread safe
-        hazed_image_queue, clear_image_queue = di.get_distorted_image(_hazed_train_img_list, dn.FLAGS.input_image_height,
-                                                                      dn.FLAGS.input_image_width, _clear_train_directory)
+        hazed_image_queue, clear_image_queue = di.get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
+                                                                      df.FLAGS.input_image_width, _clear_train_directory,
+                                                                      file_names=_hazed_train_file_names)
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-            [hazed_image_queue, clear_image_queue], capacity=2 * dn.FLAGS.num_gpus)
-
+            [hazed_image_queue, clear_image_queue], capacity=2 * df.FLAGS.num_gpus)
         # Calculate the gradients for each model tower.
         tower_grads = []
         with tf.variable_scope(tf.get_variable_scope()):
-            for i in range(dn.FLAGS.num_gpus):
+            for i in range(df.FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
                     with tf.name_scope('%s_%d' % (dn.TOWER_NAME, i)) as scope:
                         # Dequeues one batch for the GPU
@@ -225,15 +266,15 @@ def train():
         # implementations.
         sess = tf.Session(config=tf.ConfigProto(
             allow_soft_placement=True,
-            log_device_placement=dn.FLAGS.log_device_placement))
+            log_device_placement=df.FLAGS.log_device_placement))
         sess.run(init)
 
         # Start the queue runners.
         tf.train.start_queue_runners(sess=sess)
 
-        summary_writer = tf.summary.FileWriter(dn.FLAGS.train_dir, sess.graph)
+        summary_writer = tf.summary.FileWriter(df.FLAGS.train_dir, sess.graph)
 
-        for step in range(dn.FLAGS.max_steps):
+        for step in range(df.FLAGS.max_steps):
             start_time = time.time()
             _, loss_value = sess.run([train_op, loss])
             duration = time.time() - start_time
@@ -241,9 +282,9 @@ def train():
             assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
             if step % 10 == 0:
-                num_examples_per_step = dn.FLAGS.batch_size * dn.FLAGS.num_gpus
+                num_examples_per_step = df.FLAGS.batch_size * df.FLAGS.num_gpus
                 examples_per_sec = num_examples_per_step / duration
-                sec_per_batch = duration / dn.FLAGS.num_gpus
+                sec_per_batch = duration / df.FLAGS.num_gpus
 
                 format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
                               'sec/batch)')
@@ -255,13 +296,11 @@ def train():
                 summary_writer.add_summary(summary_str, step)
 
             # Save the model checkpoint periodically.
-            if step % 1000 == 0 or (step + 1) == dn.FLAGS.max_steps:
-                checkpoint_path = os.path.join(dn.FLAGS.train_dir, 'model.ckpt')
+            if step % 1000 == 0 or (step + 1) == df.FLAGS.max_steps:
+                checkpoint_path = os.path.join(df.FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
     print(PROGRAM_END)
 
 
 if __name__ == '__main__':
-    a = 10
-    b = 3
-    print(a/b)
+    tf.app.run()
