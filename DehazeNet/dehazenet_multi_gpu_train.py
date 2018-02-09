@@ -200,11 +200,15 @@ def train():
         if len(_hazed_train_img_list) == 0:
             raise RuntimeError("No image found! Please supply hazed images for training or eval ")
         # Get queues for training image and ground truth, which is internally multi-thread safe
-        hazed_image_queue, clear_image_queue = di.get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
+        hazed_image_queue = di.hazed_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
                                                                       df.FLAGS.input_image_width, _clear_train_directory,
                                                                       file_names=_hazed_train_file_names)
-        batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-            [hazed_image_queue, clear_image_queue], capacity=2 * df.FLAGS.num_gpus)
+        hazed_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
+            [hazed_image_queue], capacity=2 * df.FLAGS.num_gpus)
+        clear_image_queue = di.clear_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
+                                                         df.FLAGS.input_image_width, _clear_train_directory)
+        clear_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
+            [clear_image_queue], capacity=2 * df.FLAGS.num_gpus)
         # Calculate the gradients for each model tower.
         tower_grads = []
         with tf.variable_scope(tf.get_variable_scope()):
@@ -212,7 +216,8 @@ def train():
                 with tf.device('/gpu:%d' % i):
                     with tf.name_scope('%s_%d' % (dn.TOWER_NAME, i)) as scope:
                         # Dequeues one batch for the GPU
-                        hazed_image_batch, clear_image_batch = batch_queue.dequeue()
+                        hazed_image_batch = hazed_batch_queue.dequeue()
+                        clear_image_batch = clear_batch_queue.dequeue()
                         # Calculate the loss for one tower of the dehazenet model. This function
                         # constructs the entire dehazenet model but shares the variables across
                         # all towers.

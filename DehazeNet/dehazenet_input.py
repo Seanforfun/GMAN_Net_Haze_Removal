@@ -44,7 +44,6 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
         elif image_filename.endswith(".png") \
                 | image_filename.endswith(".jpg"):
             file_name = os.path.join(dir, image_filename)
-            file_names.append(file_name)
             current_image = Image(path=file_name)
             current_image.key = id(current_image)
             current_image.image_index = image_filename[0:IMAGE_INDEX_BIT]
@@ -54,6 +53,10 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
                 if len(image_filename) < IMAGE_INDEX_BIT + IMAGE_SUFFIX_MIN_LENGTH:
                     raise RuntimeError("Incorrect image name: " + image_filename)
                 clear_dict[current_image.image_index] = current_image
+    if not clear_image:
+        image_list_shuffle(image_list)
+    for image in image_list:
+        file_names.append(image.path)
     return file_names, image_list, clear_dict
 
 
@@ -82,7 +85,7 @@ def _read_image(filenames_queue):
 
 
 def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=True):
-    num_preprocess_threads = 16
+    num_preprocess_threads = 8
 
     if shuffle:
         h_images, c_images = tf.train.shuffle_batch(
@@ -137,7 +140,7 @@ def _find_corres_clear_image_filenames(hazed_image_list, clear_dict):
     return clear_image_name_list
 
 
-def get_distorted_image(image_batch_list, height, width, dict, Train=True, file_names=None):
+def hazed_get_distorted_image(image_batch_list, height, width, Train=True, file_names=None):
     """
     :param image_batch_list: A list used to save a batch of image objects
     :param height: The height of our training image
@@ -154,7 +157,29 @@ def get_distorted_image(image_batch_list, height, width, dict, Train=True, file_
         hazed_original_image = _read_image(filename_queue)
         reshape_hazed_image = _image_pre_process(hazed_original_image, height, width)
         resize_hazed = tf.image.resize_images(reshape_hazed_image, [height, width])
-        clear_image_names = _find_corres_clear_image_filenames(image_batch_list, dict)
+        min_fraction_of_examples_in_queue = 0.4
+        min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
+                                 min_fraction_of_examples_in_queue)
+        return _generate_image_batch(resize_hazed, min_queue_examples, df.FLAGS.batch_size,
+                                     shuffle=Train)
+    else:
+        raise RuntimeError('Error input of method distorted_image')
+
+
+def clear_get_distorted_image(hazed_image_list, height, width, dict, Train=False, file_names=None):
+    """
+    :param image_batch_list: A list used to save a batch of image objects
+    :param height: The height of our training image
+    :param width: The width of our training image
+    :param file_names: A batch of images to be trained(Optional)
+    :return: A batch list of Image object whose image_tensor are filled
+    :function: Used to read and distort a batch of images
+    """
+    if isinstance(height, int) & isinstance(width, int):
+        for image in hazed_image_list:
+            if not tf.gfile.Exists(image.image_index):
+                raise ValueError('Failed to find image from path: ' + image.image_index)
+        clear_image_names = _find_corres_clear_image_filenames(hazed_image_list, dict)
         clear_filename_queue = tf.train.string_input_producer(clear_image_names)
         clear_original_image = _read_image(clear_filename_queue)
         reshape_clear_image = _image_pre_process(clear_original_image, height, width, train=False)
@@ -162,28 +187,8 @@ def get_distorted_image(image_batch_list, height, width, dict, Train=True, file_
         min_fraction_of_examples_in_queue = 0.4
         min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                                  min_fraction_of_examples_in_queue)
-        return _generate_image_batch(resize_hazed, resize_clear, min_queue_examples, df.FLAGS.batch_size,
+        return _generate_image_batch(resize_clear, min_queue_examples, df.FLAGS.batch_size,
                                      shuffle=Train)
-        # index = 0
-        # # TODO Must be modified
-        # for image in original_image_batch:
-        #     if image.image_tensor is None:
-        #         raise RuntimeError("Failed to read image: " + image.path)
-        #     # Random crop is not suitable for DeHazeNet
-        #     # image.image_tensor = tf.random_crop(
-        #     #     image.image_tensor, [height, width, dehazenet.RGB_CHANNEL])
-        #     index += index
-        #     reshape_hazed_image = _image_pre_process(image.image_tensor, height, width)
-        #     min_fraction_of_examples_in_queue = 0.4
-        #     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
-        #                              min_fraction_of_examples_in_queue)
-        #     clear_image = _find_corres_clear_image(image, dict)
-        #     reshape_clear_image = _image_pre_process(clear_image, height, width, train=False)
-        #     # if index % min_queue_examples == 0:
-        #     #     print('Filling queue with %d images before starting to train. '
-        #     #           'This will take a few minutes.' % min_queue_examples)
-        # return _generate_image_batch(reshape_hazed_image, reshape_clear_image, min_queue_examples, df.FLAGS.batch_size,
-        #                              shuffle=Train)
     else:
         raise RuntimeError('Error input of method distorted_image')
 
