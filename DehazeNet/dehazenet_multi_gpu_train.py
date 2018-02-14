@@ -27,7 +27,7 @@ _hazed_train_file_names = []
 _hazed_train_img_list = []
 
 # Some Strings
-PROGRAM_START = "You shoot me down but I won't fall , I am titanium."
+PROGRAM_START = "viva la vida ."
 PROGRAM_END = "We don't talk anymore."
 
 
@@ -175,8 +175,11 @@ def train():
         # number of batches processed * FLAGS.num_gpus.
         global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
         # Calculate the learning rate schedule.
+        if di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN < df.FLAGS.batch_size:
+            raise RuntimeError(' NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN cannot smaller than batch_size!')
         num_batches_per_epoch = (di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
                                  df.FLAGS.batch_size)
+
         decay_steps = int(num_batches_per_epoch * dn.NUM_EPOCHS_PER_DECAY)
 
         lr = tf.train.exponential_decay(dn.INITIAL_LEARNING_RATE,
@@ -199,16 +202,23 @@ def train():
                        clear_dict=None, clear_image=False)
         if len(_hazed_train_img_list) == 0:
             raise RuntimeError("No image found! Please supply hazed images for training or eval ")
+        print(len(_hazed_train_img_list))
+
+        # Write data into a TFRecord saved in path ./TFRecord
+        di.convert_to_tfrecord(_hazed_train_img_list, _hazed_train_file_names, _clear_train_directory,
+                               df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_path)
         # Get queues for training image and ground truth, which is internally multi-thread safe
-        hazed_image_queue = di.hazed_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
-                                                                      df.FLAGS.input_image_width, _clear_train_directory,
-                                                                      file_names=_hazed_train_file_names)
-        hazed_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-            [hazed_image_queue], capacity=2 * df.FLAGS.num_gpus)
-        clear_image_queue = di.clear_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
-                                                         df.FLAGS.input_image_width, _clear_train_directory)
-        clear_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-            [clear_image_queue], capacity=2 * df.FLAGS.num_gpus)
+        # hazed_image_queue = di.hazed_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
+        #                                                               df.FLAGS.input_image_width, _clear_train_directory,
+        #                                                               file_names=_hazed_train_file_names)
+        # hazed_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
+        #     [hazed_image_queue], capacity=2 * df.FLAGS.num_gpus)
+        # clear_image_queue = di.clear_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
+        #                                                  df.FLAGS.input_image_width, _clear_train_directory)
+        hazed_image, clear_image = di.read_tfrecords_and_add_2_queue(df.FLAGS.tfrecord_path, df.FLAGS.batch_size,
+                                                                     df.FLAGS.input_image_height, df.FLAGS.input_image_width)
+        batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
+            [hazed_image, clear_image], capacity=2 * df.FLAGS.num_gpus)
         # Calculate the gradients for each model tower.
         tower_grads = []
         with tf.variable_scope(tf.get_variable_scope()):
@@ -216,8 +226,7 @@ def train():
                 with tf.device('/gpu:%d' % i):
                     with tf.name_scope('%s_%d' % (dn.TOWER_NAME, i)) as scope:
                         # Dequeues one batch for the GPU
-                        hazed_image_batch = hazed_batch_queue.dequeue()
-                        clear_image_batch = clear_batch_queue.dequeue()
+                        hazed_image_batch, clear_image_batch = batch_queue.dequeue()
                         # Calculate the loss for one tower of the dehazenet model. This function
                         # constructs the entire dehazenet model but shares the variables across
                         # all towers.
@@ -274,8 +283,9 @@ def train():
             log_device_placement=df.FLAGS.log_device_placement))
         sess.run(init)
 
+        coord = tf.train.Coordinator()
         # Start the queue runners.
-        tf.train.start_queue_runners(sess=sess)
+        tf.train.start_queue_runners(sess=sess, coord=coord)
 
         summary_writer = tf.summary.FileWriter(df.FLAGS.train_dir, sess.graph)
 

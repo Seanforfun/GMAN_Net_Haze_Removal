@@ -9,7 +9,7 @@ tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """Train the model using fp16.""")
 
 # Basic model parameters.
-tf.app.flags.DEFINE_integer('batch_size', 2,
+tf.app.flags.DEFINE_integer('batch_size', 32,
                             """Number of images to process in a batch.""")
 tf.app.flags.DEFINE_integer('input_image_height', 128,
                             """Input image height.""")
@@ -23,15 +23,17 @@ tf.app.flags.DEFINE_string('haze_train_images_dir', './HazeImages/TrainImages',
                            """Path to the hazed train images directory.""")
 tf.app.flags.DEFINE_string('clear_train_images_dir', './ClearImages/TrainImages',
                            """Path to the clear train images directory.""")
+tf.app.flags.DEFINE_string('tfrecord_path', './TFRecord/train.tfrecords',
+                           """Path to save the TFRecord of the images""")
 
 
 # Some systematic parameters
 tf.app.flags.DEFINE_string('train_dir', './DeHazeNetModel',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 1,
+tf.app.flags.DEFINE_integer('max_steps', 50,
                             """Number of batches to run.""")
-tf.app.flags.DEFINE_integer('num_gpus', 1,
+tf.app.flags.DEFINE_integer('num_gpus', 2,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")

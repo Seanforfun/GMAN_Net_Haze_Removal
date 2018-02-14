@@ -19,7 +19,7 @@ import dehazenet_flags as df
 
 IMAGE_INDEX_BIT = 4
 # TODO Need to change value before real operations
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 20
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 128
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
 IMAGE_SUFFIX_MIN_LENGTH = 4
 
@@ -60,15 +60,23 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
     return file_names, image_list, clear_dict
 
 
-def _read_image(filenames_queue):
+def _read_image(filename):
     """
     :param image_list: A image list which saves the image objects
     :param file_names: A file name list(Optional)
     :return: A image list whose image_tensor is filled
     """
-    reader = tf.WholeFileReader()
-    key, value = reader.read(filenames_queue)
-    image = tf.image.decode_png(value, channels=dehazenet.RGB_CHANNEL, dtype=tf.uint8)
+    if filename is None:
+        raise RuntimeError("Fail to load path from dictionary")
+    image_content = tf.read_file(filename)
+    if filename.endswith(".png"):
+        tensor = tf.image.decode_png(image_content, channels=dehazenet.RGB_CHANNEL, dtype=tf.uint8)
+    elif filename.endswith("jpg"):
+        tensor = tf.image.decode_jpeg(image_content, channels=dehazenet.RGB_CHANNEL)
+    return tensor
+    # reader = tf.WholeFileReader()
+    # key, value = reader.read(filenames_queue)
+    # image = tf.image.decode_png(value, channels=dehazenet.RGB_CHANNEL, dtype=tf.uint8)
     # for image in image_list:
     #     image_content = tf.read_file(image.path)
     #     if image.path.endswith(".png"):
@@ -99,7 +107,8 @@ def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_si
             [hazed_image, clear_image],
             batch_size=batch_size,
             num_threads=num_preprocess_threads,
-            capacity=min_queue_examples + 3 * batch_size)
+            capacity=min_queue_examples + 3 * batch_size
+        )
 
     # Display the training images in the visualizer.
     tf.summary.image('hazed_images', h_images)
@@ -107,7 +116,8 @@ def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_si
     return h_images, c_images
 
 
-def _image_pre_process(image, height, width, train=True):
+def _image_pre_process(image, height, width, train=False):
+    image = tf.reshape(image, [height, width, 3])
     image = tf.cast(image, tf.float32)
     if train:
         image = tf.image.random_brightness(image, max_delta=63)
@@ -125,6 +135,7 @@ def _find_corres_clear_image(image, clear_dict):
     if clear_image_obj.path is None:
         raise RuntimeError("Fail to load path from dictionary")
     image_content = tf.read_file(clear_image_obj.path)
+    # tensor = tf.image.decode_image(image_content, channels=3)
     if clear_image_obj.path.endswith(".png"):
         tensor = tf.image.decode_png(image_content, channels=dehazenet.RGB_CHANNEL, dtype=tf.uint8)
     elif clear_image_obj.path.endswith("jpg"):
@@ -153,7 +164,7 @@ def hazed_get_distorted_image(image_batch_list, height, width, Train=True, file_
         for image in image_batch_list:
             if not tf.gfile.Exists(image.path):
                 raise ValueError('Failed to find image from path: ' + image.path)
-        filename_queue = tf.train.string_input_producer(file_names)
+        filename_queue = tf.train.string_input_producer(file_names, shuffle=False)
         hazed_original_image = _read_image(filename_queue)
         reshape_hazed_image = _image_pre_process(hazed_original_image, height, width)
         resize_hazed = tf.image.resize_images(reshape_hazed_image, [height, width])
@@ -180,7 +191,7 @@ def clear_get_distorted_image(hazed_image_list, height, width, dict, Train=False
             if not tf.gfile.Exists(image.image_index):
                 raise ValueError('Failed to find image from path: ' + image.image_index)
         clear_image_names = _find_corres_clear_image_filenames(hazed_image_list, dict)
-        clear_filename_queue = tf.train.string_input_producer(clear_image_names)
+        clear_filename_queue = tf.train.string_input_producer(clear_image_names, shuffle=False)
         clear_original_image = _read_image(clear_filename_queue)
         reshape_clear_image = _image_pre_process(clear_original_image, height, width, train=False)
         resize_clear = tf.image.resize_images(reshape_clear_image, [height, width])
@@ -193,25 +204,88 @@ def clear_get_distorted_image(hazed_image_list, height, width, dict, Train=False
         raise RuntimeError('Error input of method distorted_image')
 
 
-def _get_image_batch(epoch_index, batch_index, batch_size, hazed_input_img_list, clear_dict):
-    image_input_batch = []
-    image_truthground_batch = []
-    image_truthground_list = []
-    index = (epoch_index - 1) * (batch_index - 1) * batch_size
-    image_batch_list = hazed_input_img_list[index:index+batch_size]
-    image_input_obj_batch = get_distorted_image(image_batch_list, df.FLAGS.input_image_height,
-                                                df.FLAGS.input_image_width)
-    for img in image_input_obj_batch:
-        image_input_batch.append(img.image_tensor)
-    for image in image_input_obj_batch:
-            # Find corresponding clear image object and add them into image_truthground_list
-        clear_image = clear_dict[image.image_index]
-        image_truthground_list.append(clear_image)
-    image_truthground_obj_batch = get_distorted_image(image_truthground_list, df.FLAGS.input_image_height,
-                                                      df.FLAGS.input_image_width)
-    for img in image_truthground_obj_batch:
-        image_truthground_batch.append(img.image_tensor)
-    return image_input_batch, image_truthground_batch
+def bytes_feature(value):
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+
+def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, width, tfrecord_path):
+    sess = tf.InteractiveSession()
+    if len(hazed_image_list) == 0:
+        raise RuntimeError("No example found for training! Please check your training data set!")
+    for image in hazed_image_list:
+        if not tf.gfile.Exists(image.path):
+            raise ValueError('Failed to find image from path: ' + image.path)
+    print('Start converting data into tfrecords...')
+    writer = tf.python_io.TFRecordWriter(tfrecord_path)
+    for image in hazed_image_list:
+        try:
+            hazed_image = _read_image(image.path)
+            reshape_hazed_image = tf.image.resize_images(hazed_image, [height, width])
+            reshape_hazed_image_arr = reshape_hazed_image.eval()
+            hazed_image_raw = reshape_hazed_image_arr.tostring()
+            clear_image = _find_corres_clear_image(image, dict)
+            reshape_clear_image = tf.image.resize_images(clear_image, [height, width])
+            reshape_clear_image_arr = reshape_clear_image.eval()
+            clear_image_raw = reshape_clear_image_arr.tostring()
+            example = tf.train.Example(features=tf.train.Features(feature={
+                'hazed_image_raw': bytes_feature(hazed_image_raw),
+                'clear_image_raw': bytes_feature(clear_image_raw)}))
+            writer.write(example.SerializeToString())
+        except IOError as e:
+            raise RuntimeError('Could not read:', image.path)
+    writer.close()
+    sess.close()
+    print('Transform done!')
+
+
+def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width):
+    if not tfrecords_filename:
+        raise ValueError('Please supply a tfrecords_filename')
+    filename_queue = tf.train.string_input_producer([tfrecords_filename])
+    reader = tf.TFRecordReader()
+    _, serialized_example = reader.read(filename_queue)
+    img_features = tf.parse_single_example(
+        serialized_example,
+        features={
+            'hazed_image_raw': tf.FixedLenFeature([], tf.string),
+            'clear_image_raw': tf.FixedLenFeature([], tf.string),
+        })
+    hazed_image = tf.decode_raw(img_features['hazed_image_raw'], tf.uint8)
+    clear_image = tf.decode_raw(img_features['clear_image_raw'], tf.uint8)
+    '''
+        For some reason I can't explain
+        I know Saint Peter won't call my name
+        Never an honest word
+        But that was when I ruled the world
+    '''
+
+    hazed_image = _image_pre_process(hazed_image, height, width, train=False)
+    clear_image = _image_pre_process(clear_image, height, width, train=False)
+    min_fraction_of_examples_in_queue = 0.4
+    min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
+                             min_fraction_of_examples_in_queue)
+    return _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=False)
+
+
+        # def _get_image_batch(epoch_index, batch_index, batch_size, hazed_input_img_list, clear_dict):
+#     image_input_batch = []
+#     image_truthground_batch = []
+#     image_truthground_list = []
+#     index = (epoch_index - 1) * (batch_index - 1) * batch_size
+#     image_batch_list = hazed_input_img_list[index:index+batch_size]
+#     image_input_obj_batch = get_distorted_image(image_batch_list, df.FLAGS.input_image_height,
+#                                                 df.FLAGS.input_image_width)
+#     for img in image_input_obj_batch:
+#         image_input_batch.append(img.image_tensor)
+#     for image in image_input_obj_batch:
+#             # Find corresponding clear image object and add them into image_truthground_list
+#         clear_image = clear_dict[image.image_index]
+#         image_truthground_list.append(clear_image)
+#     image_truthground_obj_batch = get_distorted_image(image_truthground_list, df.FLAGS.input_image_height,
+#                                                       df.FLAGS.input_image_width)
+#     for img in image_truthground_obj_batch:
+#         image_truthground_batch.append(img.image_tensor)
+#     return image_input_batch, image_truthground_batch
 
 
 if __name__ == '__main__':
