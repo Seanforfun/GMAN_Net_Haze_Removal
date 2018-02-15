@@ -9,7 +9,7 @@ tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """Train the model using fp16.""")
 
 # Basic model parameters.
-tf.app.flags.DEFINE_integer('batch_size', 32,
+tf.app.flags.DEFINE_integer('batch_size', 45,
                             """Number of images to process in a batch.""")
 tf.app.flags.DEFINE_integer('input_image_height', 128,
                             """Input image height.""")
@@ -33,7 +33,7 @@ tf.app.flags.DEFINE_boolean('tfrecord_rewrite', False,
 tf.app.flags.DEFINE_string('train_dir', './DeHazeNetModel',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 100000000,
+tf.app.flags.DEFINE_integer('max_steps', 777000000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 2,
                             """How many GPUs to use.""")

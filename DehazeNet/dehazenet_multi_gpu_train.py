@@ -188,7 +188,8 @@ def train():
                                         staircase=True)
 
         # Create an optimizer that performs gradient descent.
-        opt = tf.train.GradientDescentOptimizer(lr)
+        opt = tf.train.AdamOptimizer(lr)
+        # opt = tf.train.GradientDescentOptimizer(lr)
 
         # Image pre-process
         if df.FLAGS.tfrecord_rewrite:
@@ -237,7 +238,7 @@ def train():
                         summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
 
                         # Calculate the gradients for the batch of data on this CIFAR tower.
-                        grads = opt.compute_gradients(loss)
+                        grads = opt.compute_gradients(loss,  gate_gradients=1)
 
                         # Keep track of the gradients across all towers.
                         tower_grads.append(grads)
