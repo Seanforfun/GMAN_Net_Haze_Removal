@@ -9,7 +9,7 @@ tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """Train the model using fp16.""")
 
 # Basic model parameters.
-tf.app.flags.DEFINE_integer('batch_size', 25,
+tf.app.flags.DEFINE_integer('batch_size', 32,
                             """Number of images to process in a batch.""")
 tf.app.flags.DEFINE_integer('input_image_height', 128,
                             """Input image height.""")
@@ -25,13 +25,15 @@ tf.app.flags.DEFINE_string('clear_train_images_dir', './ClearImages/TrainImages'
                            """Path to the clear train images directory.""")
 tf.app.flags.DEFINE_string('tfrecord_path', './TFRecord/train.tfrecords',
                            """Path to save the TFRecord of the images""")
+tf.app.flags.DEFINE_boolean('tfrecord_rewrite', False,
+                            """Whether to delete and rewrite the TFRecord.""")
 
 
 # Some systematic parameters
 tf.app.flags.DEFINE_string('train_dir', './DeHazeNetModel',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 10000,
+tf.app.flags.DEFINE_integer('max_steps', 100000000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 2,
                             """How many GPUs to use.""")
@@ -49,6 +51,10 @@ tf.app.flags.DEFINE_string('clear_test_images_dir', './ClearImages/TestImages',
                            """Path to the clear train images directory.""")
 tf.app.flags.DEFINE_string('clear_result_images_dir', './ClearResultImages',
                            """Path to the hazed test images directory.""")
+tf.app.flags.DEFINE_string('tfrecord_eval_path', './TFRecord/eval.tfrecords',
+                           """Path to save the test TFRecord of the images""")
+tf.app.flags.DEFINE_boolean('tfrecord_eval_rewrite', False,
+                            """Whether to delete and rewrite the TFRecord.""")
 
 tf.app.flags.DEFINE_boolean('eval_log_device_placement', False,
                             """Whether to log device placement.""")

@@ -16,7 +16,7 @@ RGB_CHANNEL = 3
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
-NUM_EPOCHS_PER_DECAY = 100.0      # Epochs after which learning rate decays.
+NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
 LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
 INITIAL_LEARNING_RATE = 0.1       # Initial learning rate.
 
@@ -30,9 +30,10 @@ def main(self):
     if tf.gfile.Exists(df.FLAGS.train_dir):
         tf.gfile.DeleteRecursively(df.FLAGS.train_dir)
     tf.gfile.MakeDirs(df.FLAGS.train_dir)
-    if tf.gfile.Exists('./TFRecord/train.tfrecords'):
-        tf.gfile.Remove('./TFRecord/train.tfrecords')
-        print('We delete the old TFRecord and will generate a new one in the program.')
+    if df.FLAGS.tfrecord_rewrite:
+        if tf.gfile.Exists('./TFRecord/train.tfrecords'):
+            tf.gfile.Remove('./TFRecord/train.tfrecords')
+            print('We delete the old TFRecord and will generate a new one in the program.')
     print('start')
     dmgt.train()
     print('end')

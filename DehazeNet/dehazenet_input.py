@@ -23,7 +23,7 @@ import dehazenet_flags as df
 
 IMAGE_INDEX_BIT = 4
 # TODO Need to change value before real operations
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 100
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 320
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
 IMAGE_SUFFIX_MIN_LENGTH = 4
 

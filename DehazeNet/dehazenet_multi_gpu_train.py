@@ -179,7 +179,6 @@ def train():
             raise RuntimeError(' NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN cannot smaller than batch_size!')
         num_batches_per_epoch = (di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
                                  df.FLAGS.batch_size)
-        print(num_batches_per_epoch)
         decay_steps = int(num_batches_per_epoch * dn.NUM_EPOCHS_PER_DECAY)
 
         lr = tf.train.exponential_decay(dn.INITIAL_LEARNING_RATE,
@@ -192,29 +191,28 @@ def train():
         opt = tf.train.GradientDescentOptimizer(lr)
 
         # Image pre-process
-        # Clear training image pre-process
-        di.image_input(df.FLAGS.clear_train_images_dir, _clear_train_file_names, _clear_train_img_list,
-                       _clear_train_directory, clear_image=True)
-        if len(_clear_train_img_list) == 0:
-            raise RuntimeError("No image found! Please supply clear images for training or eval ")
-        # Hazed training image pre-process
-        di.image_input(df.FLAGS.haze_train_images_dir, _hazed_train_file_names, _hazed_train_img_list,
-                       clear_dict=None, clear_image=False)
-        if len(_hazed_train_img_list) == 0:
-            raise RuntimeError("No image found! Please supply hazed images for training or eval ")
-        print(len(_hazed_train_img_list))
+        if df.FLAGS.tfrecord_rewrite:
+            di.image_input(df.FLAGS.clear_train_images_dir, _clear_train_file_names, _clear_train_img_list,
+                           _clear_train_directory, clear_image=True)
+            if len(_clear_train_img_list) == 0:
+                raise RuntimeError("No image found! Please supply clear images for training or eval ")
+            # Hazed training image pre-process
+            di.image_input(df.FLAGS.haze_train_images_dir, _hazed_train_file_names, _hazed_train_img_list,
+                           clear_dict=None, clear_image=False)
+            if len(_hazed_train_img_list) == 0:
+                raise RuntimeError("No image found! Please supply hazed images for training or eval ")
 
-        # Write data into a TFRecord saved in path ./TFRecord
-        di.convert_to_tfrecord(_hazed_train_img_list, _hazed_train_file_names, _clear_train_directory,
-                               df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_path)
-        # Get queues for training image and ground truth, which is internally multi-thread safe
-        # hazed_image_queue = di.hazed_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
-        #                                                               df.FLAGS.input_image_width, _clear_train_directory,
-        #                                                               file_names=_hazed_train_file_names)
-        # hazed_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-        #     [hazed_image_queue], capacity=2 * df.FLAGS.num_gpus)
-        # clear_image_queue = di.clear_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
-        #                                                  df.FLAGS.input_image_width, _clear_train_directory)
+            # Write data into a TFRecord saved in path ./TFRecord
+            di.convert_to_tfrecord(_hazed_train_img_list, _hazed_train_file_names, _clear_train_directory,
+                                   df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_path)
+            # Get queues for training image and ground truth, which is internally multi-thread safe
+            # hazed_image_queue = di.hazed_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
+            #                                                               df.FLAGS.input_image_width, _clear_train_directory,
+            #                                                               file_names=_hazed_train_file_names)
+            # hazed_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
+            #     [hazed_image_queue], capacity=2 * df.FLAGS.num_gpus)
+            # clear_image_queue = di.clear_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
+            #                                                  df.FLAGS.input_image_width, _clear_train_directory)
         hazed_image, clear_image = di.read_tfrecords_and_add_2_queue(df.FLAGS.tfrecord_path, df.FLAGS.batch_size,
                                                                      df.FLAGS.input_image_height, df.FLAGS.input_image_width)
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
