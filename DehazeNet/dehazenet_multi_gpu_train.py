@@ -179,7 +179,7 @@ def train():
             raise RuntimeError(' NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN cannot smaller than batch_size!')
         num_batches_per_epoch = (di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
                                  df.FLAGS.batch_size)
-
+        print(num_batches_per_epoch)
         decay_steps = int(num_batches_per_epoch * dn.NUM_EPOCHS_PER_DECAY)
 
         lr = tf.train.exponential_decay(dn.INITIAL_LEARNING_RATE,
@@ -283,9 +283,8 @@ def train():
             log_device_placement=df.FLAGS.log_device_placement))
         sess.run(init)
 
-        coord = tf.train.Coordinator()
         # Start the queue runners.
-        tf.train.start_queue_runners(sess=sess, coord=coord)
+        tf.train.start_queue_runners(sess=sess)
 
         summary_writer = tf.summary.FileWriter(df.FLAGS.train_dir, sess.graph)
 

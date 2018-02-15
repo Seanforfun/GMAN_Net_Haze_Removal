@@ -9,8 +9,12 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+import numpy as np
 
 import os
+import skimage.io as io
+from skimage import transform
+from PIL import Image as im
 
 from Image import *
 import dehazenet as dehazenet
@@ -19,7 +23,7 @@ import dehazenet_flags as df
 
 IMAGE_INDEX_BIT = 4
 # TODO Need to change value before real operations
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 128
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 100
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
 IMAGE_SUFFIX_MIN_LENGTH = 4
 
@@ -132,15 +136,16 @@ def _image_pre_process(image, height, width, train=False):
 
 def _find_corres_clear_image(image, clear_dict):
     clear_image_obj = clear_dict[image.image_index]
-    if clear_image_obj.path is None:
-        raise RuntimeError("Fail to load path from dictionary")
-    image_content = tf.read_file(clear_image_obj.path)
+    if not tf.gfile.Exists(clear_image_obj.path):
+        raise RuntimeError("Fail to load path from dictionary: " + clear_image_obj.path)
+    clear_image = im.open(clear_image_obj.path)
+    # image_content = tf.read_file(clear_image_obj.path)
     # tensor = tf.image.decode_image(image_content, channels=3)
-    if clear_image_obj.path.endswith(".png"):
-        tensor = tf.image.decode_png(image_content, channels=dehazenet.RGB_CHANNEL, dtype=tf.uint8)
-    elif clear_image_obj.path.endswith("jpg"):
-        tensor = tf.image.decode_jpeg(image_content, channels=dehazenet.RGB_CHANNEL)
-    return tensor
+    # if clear_image_obj.path.endswith(".png"):
+    #     tensor = tf.image.decode_png(image_content, channels=dehazenet.RGB_CHANNEL, dtype=tf.uint8)
+    # elif clear_image_obj.path.endswith("jpg"):
+    #     tensor = tf.image.decode_jpeg(image_content, channels=dehazenet.RGB_CHANNEL)
+    return clear_image
 
 
 def _find_corres_clear_image_filenames(hazed_image_list, clear_dict):
@@ -168,11 +173,11 @@ def hazed_get_distorted_image(image_batch_list, height, width, Train=True, file_
         hazed_original_image = _read_image(filename_queue)
         reshape_hazed_image = _image_pre_process(hazed_original_image, height, width)
         resize_hazed = tf.image.resize_images(reshape_hazed_image, [height, width])
-        min_fraction_of_examples_in_queue = 0.4
+        min_fraction_of_examples_in_queue = 0.1
         min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                                  min_fraction_of_examples_in_queue)
         return _generate_image_batch(resize_hazed, min_queue_examples, df.FLAGS.batch_size,
-                                     shuffle=Train)
+                                     shuffle=False)
     else:
         raise RuntimeError('Error input of method distorted_image')
 
@@ -209,7 +214,6 @@ def bytes_feature(value):
 
 
 def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, width, tfrecord_path):
-    sess = tf.InteractiveSession()
     if len(hazed_image_list) == 0:
         raise RuntimeError("No example found for training! Please check your training data set!")
     for image in hazed_image_list:
@@ -219,13 +223,18 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
     writer = tf.python_io.TFRecordWriter(tfrecord_path)
     for image in hazed_image_list:
         try:
-            hazed_image = _read_image(image.path)
-            reshape_hazed_image = tf.image.resize_images(hazed_image, [height, width])
-            reshape_hazed_image_arr = reshape_hazed_image.eval()
+            # hazed_image = _read_image(image.path)
+            # reshape_hazed_image = tf.image.resize_images(hazed_image, [height, width])
+            # reshape_hazed_image_arr = reshape_hazed_image.eval()
+            # reshape_clear_image = tf.image.resize_images(clear_image, [height, width])
+            # reshape_clear_image_arr = reshape_clear_image.eval()
+            hazed_image = im.open(image.path)
+            reshape_hazed_image = hazed_image.resize((height, width))
+            reshape_hazed_image_arr = np.array(reshape_hazed_image)
             hazed_image_raw = reshape_hazed_image_arr.tostring()
             clear_image = _find_corres_clear_image(image, dict)
-            reshape_clear_image = tf.image.resize_images(clear_image, [height, width])
-            reshape_clear_image_arr = reshape_clear_image.eval()
+            reshape_clear_image = clear_image.resize((height, width))
+            reshape_clear_image_arr = np.array(reshape_clear_image)
             clear_image_raw = reshape_clear_image_arr.tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
                 'hazed_image_raw': bytes_feature(hazed_image_raw),
@@ -234,13 +243,12 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
         except IOError as e:
             raise RuntimeError('Could not read:', image.path)
     writer.close()
-    sess.close()
     print('Transform done!')
 
 
 def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width):
-    if not tfrecords_filename:
-        raise ValueError('Please supply a tfrecords_filename')
+    if not tf.gfile.Exists(tfrecords_filename):
+        raise ValueError("Fail to load TFRecord from dictionary: " + tfrecords_filename)
     filename_queue = tf.train.string_input_producer([tfrecords_filename])
     reader = tf.TFRecordReader()
     _, serialized_example = reader.read(filename_queue)
@@ -251,7 +259,11 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
             'clear_image_raw': tf.FixedLenFeature([], tf.string),
         })
     hazed_image = tf.decode_raw(img_features['hazed_image_raw'], tf.uint8)
+    hazed_image = tf.reshape(hazed_image, [height, width, 3])
+    hazed_image = tf.image.per_image_standardization(hazed_image)
     clear_image = tf.decode_raw(img_features['clear_image_raw'], tf.uint8)
+    clear_image = tf.reshape(clear_image, [height, width, 3])
+    clear_image = tf.image.per_image_standardization(clear_image)
     '''
         For some reason I can't explain
         I know Saint Peter won't call my name
@@ -259,8 +271,8 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
         But that was when I ruled the world
     '''
 
-    hazed_image = _image_pre_process(hazed_image, height, width, train=False)
-    clear_image = _image_pre_process(clear_image, height, width, train=False)
+    # hazed_image = _image_pre_process(hazed_image, height, width, train=False)
+    # clear_image = _image_pre_process(clear_image, height, width, train=False)
     min_fraction_of_examples_in_queue = 0.4
     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)

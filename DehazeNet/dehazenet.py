@@ -32,6 +32,7 @@ def main(self):
     tf.gfile.MakeDirs(df.FLAGS.train_dir)
     if tf.gfile.Exists('./TFRecord/train.tfrecords'):
         tf.gfile.Remove('./TFRecord/train.tfrecords')
+        print('We delete the old TFRecord and will generate a new one in the program.')
     print('start')
     dmgt.train()
     print('end')
