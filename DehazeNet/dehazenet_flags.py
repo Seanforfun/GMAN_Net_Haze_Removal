@@ -9,11 +9,11 @@ tf.app.flags.DEFINE_boolean('use_fp16', False,
                             """Train the model using fp16.""")
 
 # Basic model parameters.
-tf.app.flags.DEFINE_integer('batch_size', 45,
+tf.app.flags.DEFINE_integer('batch_size', 35,
                             """Number of images to process in a batch.""")
-tf.app.flags.DEFINE_integer('input_image_height', 128,
+tf.app.flags.DEFINE_integer('input_image_height', 224,
                             """Input image height.""")
-tf.app.flags.DEFINE_integer('input_image_width', 128,
+tf.app.flags.DEFINE_integer('input_image_width', 224,
                             """Input image width.""")
 tf.app.flags.DEFINE_integer('original_height', 100000,
                             """Input image original height.""")
@@ -33,7 +33,7 @@ tf.app.flags.DEFINE_boolean('tfrecord_rewrite', False,
 tf.app.flags.DEFINE_string('train_dir', './DeHazeNetModel',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_steps', 777000000,
+tf.app.flags.DEFINE_integer('max_steps', 19990000,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('num_gpus', 2,
                             """How many GPUs to use.""")
@@ -55,6 +55,8 @@ tf.app.flags.DEFINE_string('tfrecord_eval_path', './TFRecord/eval.tfrecords',
                            """Path to save the test TFRecord of the images""")
 tf.app.flags.DEFINE_boolean('tfrecord_eval_rewrite', False,
                             """Whether to delete and rewrite the TFRecord.""")
+tf.app.flags.DEFINE_string('save_image_type', 'jpg',
+                            """In which format to save image.""")
 
 tf.app.flags.DEFINE_boolean('eval_log_device_placement', False,
                             """Whether to log device placement.""")

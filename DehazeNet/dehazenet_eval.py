@@ -33,8 +33,10 @@ _clear_test_directory = {}
 # Frames used to save hazed training image information
 _hazed_test_file_names = []
 _hazed_test_img_list = []
+IMAGE_JPG_FORMAT = 'jpg'
+IMAGE_PNG_FORMAT = 'png'
 
-
+@DeprecationWarning
 def convert_to_tfrecord(hazed_image_list, height, width):
     print('Start converting data into tfrecords...')
     writer = tf.python_io.TFRecordWriter(df.FLAGS.tfrecord_eval_path)
@@ -53,17 +55,6 @@ def convert_to_tfrecord(hazed_image_list, height, width):
             raise RuntimeError('Could not read:', image.path)
     writer.close();
     print('Transform done!')
-
-
-def _save_clear_image(path, clear_image_tensor):
-    # TODO Write the clear image into specific path
-    pass
-
-
-def _evaluate_single_batch(hazed_test_image_batch, clear_test_image_batch, dest_dir):
-    # TODO Restore our CNN from trained data
-    # TODO Run operations and create the corresponding clear images
-    pass
 
 
 def _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuffle=True):
@@ -88,7 +79,7 @@ def _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuf
     tf.summary.image('hazed_images', h_images)
     return h_images, c_images
 
-
+@DeprecationWarning
 def read_eval_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width):
     if not tf.gfile.Exists(tfrecords_filename):
         raise ValueError("Fail to load TFRecord from dictionary: " + tfrecords_filename)
@@ -120,30 +111,54 @@ def evaluate():
             di.image_input(df.FLAGS.haze_test_images_dir, _hazed_test_file_names, _hazed_test_img_list,
                            clear_dict=None, clear_image=False)
             if len(_hazed_test_img_list) == 0:
-                raise RuntimeError("No image found! Please supply hazed images for training or eval ")
+                raise RuntimeError("No image found! Please supply hazed images for eval ")
+            di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _hazed_test_img_list,
+                           clear_dict=_clear_test_directory, clear_image=True)
             # 1.2 Save images into TFRecord
-            convert_to_tfrecord(_hazed_test_img_list, df.FLAGS.input_image_height, df.FLAGS.input_image_width)
+            di.convert_to_tfrecord(_hazed_test_img_list, _hazed_test_file_names, _clear_test_directory,
+                                   df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_eval_path)
         # 2.Read data from TFRecord
-        hazed_image = read_eval_tfrecords_and_add_2_queue(df.FLAGS.tfrecord_eval_path, df.FLAGS.batch_size,
-                                                          df.FLAGS.input_image_height, df.FLAGS.input_image_width)
-        batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue([hazed_image], capacity=2 * df.FLAGS.num_gpus)
+        hazed_image, clear_image = di.read_tfrecords_and_add_2_queue(df.FLAGS.tfrecord_eval_path, df.FLAGS.batch_size,
+                                                                     df.FLAGS.input_image_height,
+                                                                     df.FLAGS.input_image_width)
+        batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue([hazed_image, clear_image], capacity=2 * df.FLAGS.num_gpus)
 
         # 3.Dequeue in every GPU and create clear images
         with tf.variable_scope(tf.get_variable_scope()):
             for i in range(df.FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
                     with tf.name_scope('%s_%d' % (dn.TOWER_NAME, i)) as scope:
-                        hazed_image_batch = batch_queue.dequeue()
+                        hazed_image_batch, clear_image_batch = batch_queue.dequeue()
                         # 3.1 Train a batch of image and get a tensor used to represent the images
+                        ground_truth_image_tensor = tf.squeeze(clear_image_batch, [0])
                         logist = dmgt.inference(hazed_image_batch)
+                        predict_image_tensor = tf.squeeze(logist, [0])
+                        image_name_base = str(time.time())
+                        if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
+                            predict_image_jpg = tf.image.encode_jpeg(predict_image_tensor, format='rgb')
+                            gt_image_jpg = tf.image.encode_jpeg(ground_truth_image_tensor, format='rgb')
+                            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base+'_pred.jpg',
+                                                'wb') as f:
+                                f.write(predict_image_jpg.eval())
+                            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.jpg',
+                                                'wb') as f:
+                                f.write(gt_image_jpg.eval())
+                        elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
+                            predict_image_jpg = tf.image.encode_png(predict_image_tensor, format='rgb')
+                            gt_image_jpg = tf.image.encode_png(ground_truth_image_tensor, format='rgb')
+                            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base+'_pred.png',
+                                                'wb') as f:
+                                f.write(predict_image_jpg.eval())
+                            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.png',
+                                                'wb') as f:
+                                f.write(gt_image_jpg.eval())
 
-                        pass
 
 
 def main():
     if df.FLAGS.tfrecord_eval_rewrite:
         if tf.gfile.Exists(df.FLAGS.tfrecord_eval_path):
-            tf.gfile.Remove(df.FLAGS.eval_dir)
+            tf.gfile.Remove(df.FLAGS.tfrecord_eval_path)
             print('We delete the old TFRecord and will generate a new one in the program.')
     evaluate()
 

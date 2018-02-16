@@ -23,7 +23,7 @@ import dehazenet_flags as df
 
 IMAGE_INDEX_BIT = 4
 # TODO Need to change value before real operations
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 34965
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 69965
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
 IMAGE_SUFFIX_MIN_LENGTH = 4
 
@@ -63,7 +63,7 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
         file_names.append(image.path)
     return file_names, image_list, clear_dict
 
-
+@DeprecationWarning
 def _read_image(filename):
     """
     :param image_list: A image list which saves the image objects
@@ -103,7 +103,7 @@ def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_si
     tf.summary.image('clear_images', c_images)
     return h_images, c_images
 
-
+@DeprecationWarning
 def _image_pre_process(image, height, width, train=False):
     image = tf.reshape(image, [height, width, 3])
     image = tf.cast(image, tf.float32)
@@ -125,7 +125,7 @@ def _find_corres_clear_image(image, clear_dict):
     clear_image = im.open(clear_image_obj.path)
     return clear_image
 
-
+@DeprecationWarning
 def _find_corres_clear_image_filenames(hazed_image_list, clear_dict):
     clear_image_name_list = []
     for image in hazed_image_list:
@@ -133,7 +133,7 @@ def _find_corres_clear_image_filenames(hazed_image_list, clear_dict):
         clear_image_name_list.append(clear_image_obj.path)
     return clear_image_name_list
 
-
+@DeprecationWarning
 def hazed_get_distorted_image(image_batch_list, height, width, Train=True, file_names=None):
     """
     :param image_batch_list: A list used to save a batch of image objects
@@ -159,7 +159,7 @@ def hazed_get_distorted_image(image_batch_list, height, width, Train=True, file_
     else:
         raise RuntimeError('Error input of method distorted_image')
 
-
+@DeprecationWarning
 def clear_get_distorted_image(hazed_image_list, height, width, dict, Train=False, file_names=None):
     """
     :param image_batch_list: A list used to save a batch of image objects
@@ -202,7 +202,7 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
     for image in hazed_image_list:
         try:
             hazed_image = im.open(image.path)
-            reshape_hazed_image = hazed_image.resize((height, width))
+            reshape_hazed_image = hazed_image.resize((height, width), resample=im.BICUBIC)
             reshape_hazed_image_arr = np.array(reshape_hazed_image)
             hazed_image_raw = reshape_hazed_image_arr.tostring()
             clear_image = _find_corres_clear_image(image, dict)
@@ -234,17 +234,22 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
     hazed_image = tf.decode_raw(img_features['hazed_image_raw'], tf.uint8)
     hazed_image = tf.reshape(hazed_image, [height, width, 3])
     if df.FLAGS.use_fp16:
-        hazed_image = tf.cast(hazed_image, tf.float16)
+        #hazed_image = tf.cast(hazed_image, tf.float16)
+        hazed_image = tf.image.convert_image_dtype(hazed_image, tf.float16)
     else:
-        hazed_image = tf.cast(hazed_image, tf.float32)
-    hazed_image = tf.image.per_image_standardization(hazed_image)
+        hazed_image = tf.image.convert_image_dtype(hazed_image, tf.float32)
+        #hazed_image = tf.cast(hazed_image, tf.float32)
+    #hazed_image = tf.image.per_image_standardization(hazed_image)
+    #hazed_image = hazed_image/255
     clear_image = tf.decode_raw(img_features['clear_image_raw'], tf.uint8)
     clear_image = tf.reshape(clear_image, [height, width, 3])
     if df.FLAGS.use_fp16:
-        clear_image = tf.cast(clear_image, tf.float16)
+        clear_image = tf.image.convert_image_dtype(clear_image, tf.float16)
     else:
-        clear_image = tf.cast(clear_image, tf.float32)
-    clear_image = tf.image.per_image_standardization(clear_image)
+        clear_image = tf.image.convert_image_dtype(clear_image, tf.float32)
+        #clear_image = tf.cast(clear_image, tf.float32)
+    #clear_image = tf.image.per_image_standardization(clear_image)
+    #clear_image = clear_image/255
     min_fraction_of_examples_in_queue = 0.4
     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)

@@ -238,7 +238,7 @@ def train():
                         summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
 
                         # Calculate the gradients for the batch of data on this CIFAR tower.
-                        grads = opt.compute_gradients(loss,  gate_gradients=1)
+                        grads = opt.compute_gradients(loss)
 
                         # Keep track of the gradients across all towers.
                         tower_grads.append(grads)
@@ -258,11 +258,11 @@ def train():
                 summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
 
         # Track the moving averages of all trainable variables.
-        variable_averages = tf.train.ExponentialMovingAverage(
-            dn.MOVING_AVERAGE_DECAY, global_step)
+        variable_averages = tf.train.ExponentialMovingAverage(dn.MOVING_AVERAGE_DECAY, global_step)
         variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
         # Group all updates to into a single train op.
+        # , variables_averages_op
         train_op = tf.group(apply_gradient_op, variables_averages_op)
 
         # Create a saver.
@@ -299,7 +299,7 @@ def train():
                 examples_per_sec = num_examples_per_step / duration
                 sec_per_batch = duration / df.FLAGS.num_gpus
 
-                format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
+                format_str = ('%s: step %d, loss = %.8f (%.1f examples/sec; %.3f '
                               'sec/batch)')
                 print(format_str % (datetime.now(), step, loss_value,
                                     examples_per_sec, sec_per_batch))
@@ -316,4 +316,4 @@ def train():
 
 
 if __name__ == '__main__':
-    tf.app.run()
+    pass

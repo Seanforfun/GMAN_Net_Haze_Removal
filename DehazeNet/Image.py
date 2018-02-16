@@ -7,6 +7,7 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+import time
 
 
 class Image(object):
@@ -18,5 +19,5 @@ class Image(object):
 
 
 if __name__ == '__main__':
-    i = Image("ASD", 12)
-    print(i.path)
+    print(str(time.time()) + 'asdsf')
+    pass
