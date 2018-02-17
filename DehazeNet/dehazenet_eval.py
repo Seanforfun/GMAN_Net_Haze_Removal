@@ -18,6 +18,7 @@ import numpy as np
 import skimage.io as io
 from skimage import transform
 from PIL import Image as im
+import math
 
 import re
 from datetime import datetime
@@ -103,8 +104,49 @@ def read_eval_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, 
     return _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuffle=True)
 
 
+def eval_once(saver, writer, train_op, summary_op):
+    with tf.Session() as sess:
+        ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            # Restores from checkpoint
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            # Assuming model_checkpoint_path looks something like:
+            #   /my-favorite-path/cifar10_train/model.ckpt-0,
+            # extract global_step from it.
+            global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
+        else:
+            print('No checkpoint file found')
+            return
+        # Start the queue runners.
+        coord = tf.train.Coordinator()
+        try:
+            threads = []
+            for qr in tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS):
+                threads.extend(qr.create_threads(sess, coord=coord, daemon=True,
+                                                 start=True))
+
+            num_iter = int(math.ceil(df.FLAGS.num_examples / df.FLAGS.batch_size))
+            true_count = 0  # Counts the number of correct predictions.
+            total_sample_count = num_iter * df.FLAGS.batch_size
+            step = 0
+            while step < num_iter and not coord.should_stop():
+                predictions, ground_truth_images = sess.run([train_op])
+                write_images_to_file(predictions, ground_truth_images)
+                step += 1
+
+            summary = tf.Summary()
+            summary.ParseFromString(sess.run(summary_op))
+            writer.add_summary(summary, global_step)
+        except Exception as e:  # pylint: disable=broad-except
+            coord.request_stop(e)
+
+        coord.request_stop()
+        coord.join(threads, stop_grace_period_secs=10)
+
+
+
 def evaluate():
-    with tf.Graph().as_default(), tf.device('/cpu:0'):
+    with tf.Graph().as_default() as g:
         # 1.Create TFRecord for evaluate data
         if df.FLAGS.tfrecord_eval_rewrite:
             # 1.1 Read images from directory and save to memory
@@ -123,36 +165,52 @@ def evaluate():
                                                                      df.FLAGS.input_image_width)
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue([hazed_image, clear_image], capacity=2 * df.FLAGS.num_gpus)
 
-        # 3.Dequeue in every GPU and create clear images
-        with tf.variable_scope(tf.get_variable_scope()):
-            for i in range(df.FLAGS.num_gpus):
-                with tf.device('/gpu:%d' % i):
-                    with tf.name_scope('%s_%d' % (dn.TOWER_NAME, i)) as scope:
-                        hazed_image_batch, clear_image_batch = batch_queue.dequeue()
-                        # 3.1 Train a batch of image and get a tensor used to represent the images
-                        ground_truth_image_tensor = tf.squeeze(clear_image_batch, [0])
-                        logist = dmgt.inference(hazed_image_batch)
-                        predict_image_tensor = tf.squeeze(logist, [0])
-                        image_name_base = str(time.time())
-                        if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
-                            predict_image_jpg = tf.image.encode_jpeg(predict_image_tensor, format='rgb')
-                            gt_image_jpg = tf.image.encode_jpeg(ground_truth_image_tensor, format='rgb')
-                            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base+'_pred.jpg',
-                                                'wb') as f:
-                                f.write(predict_image_jpg.eval())
-                            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.jpg',
-                                                'wb') as f:
-                                f.write(gt_image_jpg.eval())
-                        elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
-                            predict_image_jpg = tf.image.encode_png(predict_image_tensor, format='rgb')
-                            gt_image_jpg = tf.image.encode_png(ground_truth_image_tensor, format='rgb')
-                            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base+'_pred.png',
-                                                'wb') as f:
-                                f.write(predict_image_jpg.eval())
-                            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.png',
-                                                'wb') as f:
-                                f.write(gt_image_jpg.eval())
+        hazed_image_batch, clear_image_batch = batch_queue.dequeue()
+        # 3.1 Train a batch of image and get a tensor used to represent the images
+        ground_truth_image_tensor = tf.squeeze(clear_image_batch, [0])
+        logist = dmgt.inference(hazed_image_batch)
 
+        variable_averages = tf.train.ExponentialMovingAverage(
+            dn.MOVING_AVERAGE_DECAY)
+        variables_to_restore = variable_averages.variables_to_restore()
+        saver = tf.train.Saver(variables_to_restore)
+
+        # Build the summary operation based on the TF collection of Summaries.
+        summary_op = tf.summary.merge_all()
+
+        summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
+
+        train_op = tf.group(logist, ground_truth_image_tensor)
+
+        while True:
+            eval_once(saver, summary_writer, train_op, summary_op)
+            if df.FLAGS.run_once:
+                break
+            time.sleep(df.FLAGS.eval_interval_secs)
+
+
+# TODO Need to specify for each of the images
+def write_images_to_file(logist, ground_truth_images):
+    predict_image_tensor = tf.squeeze(logist, [0])
+    image_name_base = str(time.time())
+    if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
+        predict_image_jpg = tf.image.encode_jpeg(predict_image_tensor, format='rgb')
+        gt_image_jpg = tf.image.encode_jpeg(ground_truth_images, format='rgb')
+        with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.jpg',
+                            'wb') as f:
+            f.write(predict_image_jpg.eval())
+        with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.jpg',
+                            'wb') as f:
+            f.write(gt_image_jpg.eval())
+    elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
+        predict_image_jpg = tf.image.encode_png(predict_image_tensor, format='rgb')
+        gt_image_jpg = tf.image.encode_png(ground_truth_images, format='rgb')
+        with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.png',
+                            'wb') as f:
+            f.write(predict_image_jpg.eval())
+        with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.png',
+                            'wb') as f:
+            f.write(gt_image_jpg.eval())
 
 
 def main():

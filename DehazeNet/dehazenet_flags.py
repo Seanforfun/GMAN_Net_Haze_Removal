@@ -68,3 +68,7 @@ tf.app.flags.DEFINE_integer('eval_input_image_height', 128,
                             """Input image height.""")
 tf.app.flags.DEFINE_integer('eval_input_image_width', 128,
                             """Input image width.""")
+tf.app.flags.DEFINE_integer('eval_interval_secs', 60 * 10,
+                            """How often to run the eval.""")
+tf.app.flags.DEFINE_integer('num_examples', 1000000000,
+                            """Number of test examples to run""")
