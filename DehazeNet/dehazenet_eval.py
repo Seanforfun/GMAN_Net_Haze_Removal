@@ -190,13 +190,14 @@ def evaluate():
             time.sleep(df.FLAGS.eval_interval_secs)
 
 
-# TODO Need to specify for each of the images
 def write_images_to_file(logist, ground_truth_images):
     for i in range(len(logist)):
         image_name_base = str(time.time())
+        logist_to_save = logist[i] * 255
+        gt_to_save = ground_truth_images[i] * 255
         if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
-            predict_image_jpg = tf.image.encode_jpeg(logist[i], format='rgb')
-            gt_image_jpg = tf.image.encode_jpeg(ground_truth_images[i], format='rgb')
+            predict_image_jpg = tf.image.encode_jpeg(logist_to_save, format='rgb')
+            gt_image_jpg = tf.image.encode_jpeg(gt_to_save, format='rgb')
             with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.jpg',
                                 'wb') as f:
                 f.write(predict_image_jpg.eval())
@@ -204,8 +205,8 @@ def write_images_to_file(logist, ground_truth_images):
                                 'wb') as f:
                 f.write(gt_image_jpg.eval())
         elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
-            predict_image_jpg = tf.image.encode_png(logist[i], format='rgb')
-            gt_image_jpg = tf.image.encode_png(ground_truth_images[i], format='rgb')
+            predict_image_jpg = tf.image.encode_png(logist_to_save, format='rgb')
+            gt_image_jpg = tf.image.encode_png(gt_to_save, format='rgb')
             with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.png',
                                 'wb') as f:
                 f.write(predict_image_jpg.eval())
