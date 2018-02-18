@@ -80,6 +80,7 @@ def _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuf
     tf.summary.image('hazed_images', h_images)
     return h_images, c_images
 
+
 @DeprecationWarning
 def read_eval_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width):
     if not tf.gfile.Exists(tfrecords_filename):
@@ -191,17 +192,11 @@ def evaluate():
 
 # TODO Need to specify for each of the images
 def write_images_to_file(logist, ground_truth_images):
-    predict_image_tensor = tf.squeeze(logist, [0])
-    slice_shape = []
-    for i in df.FLAGS.batch_size:
-        slice_shape.append(1)
-    slice_predict_image = tf.slice(logist, slice_shape, 0)
-    sliced_gt_image = tf.slice(ground_truth_images, slice_shape, 0)
-    for i in range(len(slice_predict_image)):
+    for i in range(len(logist)):
         image_name_base = str(time.time())
         if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
-            predict_image_jpg = tf.image.encode_jpeg(slice_predict_image[i], format='rgb')
-            gt_image_jpg = tf.image.encode_jpeg(sliced_gt_image[i], format='rgb')
+            predict_image_jpg = tf.image.encode_jpeg(logist[i], format='rgb')
+            gt_image_jpg = tf.image.encode_jpeg(ground_truth_images[i], format='rgb')
             with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.jpg',
                                 'wb') as f:
                 f.write(predict_image_jpg.eval())
@@ -209,8 +204,8 @@ def write_images_to_file(logist, ground_truth_images):
                                 'wb') as f:
                 f.write(gt_image_jpg.eval())
         elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
-            predict_image_jpg = tf.image.encode_png(slice_predict_image[i], format='rgb')
-            gt_image_jpg = tf.image.encode_png(sliced_gt_image[i], format='rgb')
+            predict_image_jpg = tf.image.encode_png(logist[i], format='rgb')
+            gt_image_jpg = tf.image.encode_png(ground_truth_images[i], format='rgb')
             with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.png',
                                 'wb') as f:
                 f.write(predict_image_jpg.eval())

@@ -234,22 +234,15 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
     hazed_image = tf.decode_raw(img_features['hazed_image_raw'], tf.uint8)
     hazed_image = tf.reshape(hazed_image, [height, width, 3])
     if df.FLAGS.use_fp16:
-        #hazed_image = tf.cast(hazed_image, tf.float16)
         hazed_image = tf.image.convert_image_dtype(hazed_image, tf.float16)
     else:
         hazed_image = tf.image.convert_image_dtype(hazed_image, tf.float32)
-        #hazed_image = tf.cast(hazed_image, tf.float32)
-    #hazed_image = tf.image.per_image_standardization(hazed_image)
-    #hazed_image = hazed_image/255
     clear_image = tf.decode_raw(img_features['clear_image_raw'], tf.uint8)
     clear_image = tf.reshape(clear_image, [height, width, 3])
     if df.FLAGS.use_fp16:
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float16)
     else:
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float32)
-        #clear_image = tf.cast(clear_image, tf.float32)
-    #clear_image = tf.image.per_image_standardization(clear_image)
-    #clear_image = clear_image/255
     min_fraction_of_examples_in_queue = 0.4
     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)
