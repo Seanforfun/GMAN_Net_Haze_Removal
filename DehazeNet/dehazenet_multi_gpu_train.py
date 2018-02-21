@@ -83,12 +83,6 @@ def inference(hazed_batch):
     return x
 
 
-def tf_psnr(im1, im2):
-    # assert pixel value range is 0-1
-    mse = tf.losses.mean_squared_error(labels=im2 * 255.0, predictions=im1 * 255.0)
-    return 10.0 * (tf.log(255.0 ** 2 / mse) / tf.log(10.0))
-
-
 def loss(result_batch, clear_image_batch):
     """
     :param result_batch: A batch of image that been processed by out CNN
@@ -97,7 +91,7 @@ def loss(result_batch, clear_image_batch):
     but is left here to show respect to CIFAR-10 source code
     """
     # TODO Lida Xu please redesign this function to achieve a better representation of loss
-    loss = tf_psnr(result_batch, clear_image_batch) / df.FLAGS.batch_size
+    loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch)))
     tf.add_to_collection('losses', loss)
 
     # The total loss is defined as the ms loss plus all of the weight

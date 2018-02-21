@@ -118,7 +118,7 @@ def _image_pre_process(image, height, width, train=False):
     return float_image
 
 
-def _find_corres_clear_image(image, clear_dict):
+def find_corres_clear_image(image, clear_dict):
     clear_image_obj = clear_dict[image.image_index]
     if not tf.gfile.Exists(clear_image_obj.path):
         raise RuntimeError("Fail to load path from dictionary: " + clear_image_obj.path)
@@ -205,7 +205,7 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
             reshape_hazed_image = hazed_image.resize((height, width), resample=im.BICUBIC)
             reshape_hazed_image_arr = np.array(reshape_hazed_image)
             hazed_image_raw = reshape_hazed_image_arr.tostring()
-            clear_image = _find_corres_clear_image(image, dict)
+            clear_image = find_corres_clear_image(image, dict)
             reshape_clear_image = clear_image.resize((height, width))
             reshape_clear_image_arr = np.array(reshape_clear_image)
             clear_image_raw = reshape_clear_image_arr.tostring()

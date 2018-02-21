@@ -43,13 +43,13 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
 # Variables for evaluation
 tf.app.flags.DEFINE_string('eval_dir', './DeHazeNet_eval',
                            """Directory where to write event logs.""")
-tf.app.flags.DEFINE_string('checkpoint_dir', './DeHazeNetEval',
+tf.app.flags.DEFINE_string('checkpoint_dir', './DeHazeNetModel',
                            """Directory where to read model checkpoints.""")
 tf.app.flags.DEFINE_string('haze_test_images_dir', './HazeImages/TestImages',
                            """Path to the hazed test images directory.""")
 tf.app.flags.DEFINE_string('clear_test_images_dir', './ClearImages/TestImages',
                            """Path to the clear train images directory.""")
-tf.app.flags.DEFINE_string('clear_result_images_dir', './ClearResultImages',
+tf.app.flags.DEFINE_string('clear_result_images_dir', './ClearResultImages/',
                            """Path to the hazed test images directory.""")
 tf.app.flags.DEFINE_string('tfrecord_eval_path', './TFRecord/eval.tfrecords',
                            """Path to save the test TFRecord of the images""")
