@@ -36,6 +36,7 @@ _hazed_test_file_names = []
 _hazed_test_img_list = []
 IMAGE_JPG_FORMAT = 'jpg'
 IMAGE_PNG_FORMAT = 'png'
+SINGLE_IMAGE_NUM = 1
 
 @DeprecationWarning
 def convert_to_tfrecord(hazed_image_list, height, width):
@@ -105,19 +106,16 @@ def read_eval_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, 
     return _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuffle=True)
 
 
-def eval_once(saver, writer, train_op, summary_op):
-    with tf.Session() as sess:
-        ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
-        if ckpt and ckpt.model_checkpoint_path:
-            # Restores from checkpoint
-            saver.restore(sess, ckpt.model_checkpoint_path)
-            # Assuming model_checkpoint_path looks something like:
-            #   /my-favorite-path/cifar10_train/model.ckpt-0,
-            # extract global_step from it.
-            global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
-        else:
-            print('No checkpoint file found')
-            return
+def eval_once(saver, writer, train_op, summary_op, session, image):
+    with session as sess:
+        hazed_image_batch_with_single_image = []
+        # Run the session and get the prediction of one clear image
+        hazed_image = im.open(image.path)
+        reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width), resample=im.BICUBIC)
+        reshape_hazed_image_arr = np.array(reshape_hazed_image)
+        float_hazed_image = tf.image.convert_image_dtype(reshape_hazed_image_arr, tf.float32)
+        prediction = sess.run([train_op], feed_dict=float_hazed_image)
+        write_images_to_file(prediction, ground_truth_images)
         # Start the queue runners.
         coord = tf.train.Coordinator()
         try:
@@ -145,8 +143,7 @@ def eval_once(saver, writer, train_op, summary_op):
         coord.join(threads, stop_grace_period_secs=10)
 
 
-
-def evaluate():
+def _evaluate():
     with tf.Graph().as_default() as g:
         # 1.Create TFRecord for evaluate data
         if df.FLAGS.tfrecord_eval_rewrite:
@@ -190,36 +187,87 @@ def evaluate():
             time.sleep(df.FLAGS.eval_interval_secs)
 
 
-def write_images_to_file(logist, ground_truth_images):
-    for i in range(len(logist)):
-        image_name_base = str(time.time())
-        logist_to_save = logist[i] * 255
-        gt_to_save = ground_truth_images[i] * 255
-        if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
-            predict_image_jpg = tf.image.encode_jpeg(logist_to_save, format='rgb')
-            gt_image_jpg = tf.image.encode_jpeg(gt_to_save, format='rgb')
-            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.jpg',
-                                'wb') as f:
-                f.write(predict_image_jpg.eval())
-            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.jpg',
-                                'wb') as f:
-                f.write(gt_image_jpg.eval())
-        elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
-            predict_image_jpg = tf.image.encode_png(logist_to_save, format='rgb')
-            gt_image_jpg = tf.image.encode_png(gt_to_save, format='rgb')
-            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.png',
-                                'wb') as f:
-                f.write(predict_image_jpg.eval())
-            with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.png',
-                                'wb') as f:
-                f.write(gt_image_jpg.eval())
+def evaluate():
+    with tf.Graph().as_default() as g:
+        # Read all images from directory and save into memory
+        di.image_input(df.FLAGS.haze_test_images_dir, _hazed_test_file_names, _hazed_test_img_list,
+                       clear_dict=None, clear_image=False)
+        if len(_hazed_test_img_list) == 0:
+            raise RuntimeError("No image found! Please supply hazed images for eval ")
+        for image in _hazed_test_img_list:
+            hazed_image = tf.placeholder(tf.float32, shape=[SINGLE_IMAGE_NUM, df.FLAGS.input_image_height, df.FLAGS.input_image_width, dn.RGB_CHANNEL])
+            logist = dmgt.inference(hazed_image)
+            variable_averages = tf.train.ExponentialMovingAverage(
+                dn.MOVING_AVERAGE_DECAY)
+            variables_to_restore = variable_averages.variables_to_restore()
+            saver = tf.train.Saver(variables_to_restore)
+
+            # Build the summary operation based on the TF collection of Summaries.
+            summary_op = tf.summary.merge_all()
+
+            summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
+            sess = tf.Session()
+            ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
+            if ckpt and ckpt.model_checkpoint_path:
+                # Restores from checkpoint
+                saver.restore(sess, ckpt.model_checkpoint_path)
+                # Assuming model_checkpoint_path looks something like:
+                #   /my-favorite-path/cifar10_train/model.ckpt-0,
+                # extract global_step from it.
+                global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
+            else:
+                print('No checkpoint file found')
+                return
+            while True:
+                eval_once(saver, summary_writer, logist, summary_op, session=sess, image=image)
+                if df.FLAGS.run_once:
+                    break
+                time.sleep(df.FLAGS.eval_interval_secs)
+
+
+def write_images_to_file(logist, image):
+    image_name_base = image.image_index
+    logist_to_save = logist[0] * 255
+    if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
+        predict_image_jpg = tf.image.encode_jpeg(logist_to_save, format='rgb')
+        with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.jpg',
+                            'wb') as f:
+            f.write(predict_image_jpg.eval())
+    elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
+        predict_image_jpg = tf.image.encode_png(logist_to_save, format='rgb')
+        with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.png',
+                            'wb') as f:
+            f.write(predict_image_jpg.eval())
+
+    # for i in range(len(logist)):
+    #     image_name_base = str(time.time())
+    #     logist_to_save = logist[i] * 255
+    #     gt_to_save = ground_truth_images[i] * 255
+    #     if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
+    #         predict_image_jpg = tf.image.encode_jpeg(logist_to_save, format='rgb')
+    #         gt_image_jpg = tf.image.encode_jpeg(gt_to_save, format='rgb')
+    #         with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.jpg',
+    #                             'wb') as f:
+    #             f.write(predict_image_jpg.eval())
+    #         with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.jpg',
+    #                             'wb') as f:
+    #             f.write(gt_image_jpg.eval())
+    #     elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
+    #         predict_image_jpg = tf.image.encode_png(logist_to_save, format='rgb')
+    #         gt_image_jpg = tf.image.encode_png(gt_to_save, format='rgb')
+    #         with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.png',
+    #                             'wb') as f:
+    #             f.write(predict_image_jpg.eval())
+    #         with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.png',
+    #                             'wb') as f:
+    #             f.write(gt_image_jpg.eval())
 
 
 def main():
-    if df.FLAGS.tfrecord_eval_rewrite:
-        if tf.gfile.Exists(df.FLAGS.tfrecord_eval_path):
-            tf.gfile.Remove(df.FLAGS.tfrecord_eval_path)
-            print('We delete the old TFRecord and will generate a new one in the program.')
+    # if df.FLAGS.tfrecord_eval_rewrite:
+    #     if tf.gfile.Exists(df.FLAGS.tfrecord_eval_path):
+    #         tf.gfile.Remove(df.FLAGS.tfrecord_eval_path)
+    #         print('We delete the old TFRecord and will generate a new one in the program.')
     evaluate()
 
 
