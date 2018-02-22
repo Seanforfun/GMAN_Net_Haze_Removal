@@ -79,6 +79,46 @@ def conv(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], stride=[1
         return x
 
 
+
+def conv_nonacti(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1, 1, 1]):
+    '''
+    Layer only do the job of convolution and bias adding
+    '''
+    with tf.variable_scope(layer_name):
+        w = tf.get_variable(name='weights_nonacti',
+                            shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
+                            initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable(name='biases_nonacti',
+                            shape=[out_channels],
+                            initializer=tf.constant_initializer(0.0))
+        x = tf.nn.conv2d(x, w, stride, padding='SAME', name='conv_nonacti')
+        x = tf.nn.bias_add(x, b, name='bias_add_nonacti')
+        return x
+
+
+def acti_layer(x):
+    '''
+        Layer only with activation function
+    '''
+    x = tf.nn.relu(x, name='only_relu')
+    return x
+
+
+def deconv(layer_name, x, in_channels, out_channels, output_shape=[32, 224, 224, 64], kernel_size=[3, 3], stride=[1, 1, 1, 1]):
+    with tf.variable_scope(layer_name):
+        w = tf.get_variable(name='weights',
+                            shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
+                            initializer=tf.contrib.layers.xavier_initializer())  # default is uniform distribution initialization
+        # b = tf.get_variable(name='biases',
+        #                     shape=[out_channels],
+        #                     initializer=tf.constant_initializer(0.0))
+        x = tf.nn.conv2d_transpose(x, w, output_shape=output_shape, strides=stride, padding='SAME',
+                                   name='deconv')
+        # x = tf.nn.bias_add(x, b, name='bias_add')
+        # x = tf.nn.relu(x, name='relu')
+        return x
+
+
 def pool(layer_name, x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True):
     if is_max_pool:
         x = tf.nn.max_pool(x, kernel, strides=stride, padding='SAME', name=layer_name)

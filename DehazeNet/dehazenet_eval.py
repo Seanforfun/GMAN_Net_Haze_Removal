@@ -38,6 +38,69 @@ IMAGE_JPG_FORMAT = 'jpg'
 IMAGE_PNG_FORMAT = 'png'
 SINGLE_IMAGE_NUM = 1
 
+
+# TODO Zheng Liu's Place for evaluating his network
+def lz_net(hazed_batch):
+    with tf.name_scope('DehazeNet'):
+        x = dt.conv('conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+        # with tf.name_scope('pool1'):
+        #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+        #
+        # with tf.name_scope('pool2'):
+        #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+
+        x = dt.conv('upsampling_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
+        x = dt.conv('upsampling_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
+
+        x1 = dt.conv('conv1_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+        x = dt.conv('conv2_1', x1, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv_nonacti('conv2_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = tf.add(x, x1)
+        x = dt.acti_layer(x)
+        x2 = dt.conv('conv3_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv3_2', x2, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv_nonacti('conv3_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = tf.add(x, x2)
+        x = dt.acti_layer(x)
+
+        # x = tools.deconv('deconv3', x, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
+        x3 = dt.conv('conv4_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv_nonacti('conv4_2', x3, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = tf.add(x, x3)
+        x = dt.acti_layer(x)
+        x = dt.conv('conv4_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+        x4 = dt.conv('conv5_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv('conv5_2', x4, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = dt.conv_nonacti('conv5_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        x = tf.add(x, x4)
+        x = dt.acti_layer(x)
+
+        x = dt.deconv('deconv1', x, 64, 64, output_shape=[1, 112, 112, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
+
+        x = dt.deconv('deconv2', x, 64, 64, output_shape=[1, 224, 224, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
+
+        x = dt.conv('conv6_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+        x = dt.conv('conv6_2', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+        # x = tf.layers.conv2d(x, output_channels, 3, padding='same')
+        # x = tools.conv('conv6_3', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+        # x = tools.FC_layer('fc6', x, out_nodes=4096)
+        # with tf.name_scope('batch_norm1'):
+
+        #     x = tools.batch_norm(x)
+        # x = tools.FC_layer('fc7', x, out_nodes=4096)
+        # with tf.name_scope('batch_norm2'):
+        #     x = tools.batch_norm(x)
+        # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
+
+        return x
+
+
 @DeprecationWarning
 def convert_to_tfrecord(hazed_image_list, height, width):
     print('Start converting data into tfrecords...')
@@ -132,13 +195,9 @@ def eval_once(saver, writer, train_op, summary_op, hazed_images, clear_images, h
         else:
             print('No checkpoint file found')
             return
-        # temp_batch = []
-        # temp_batch.append(hazed_images)
-        # tf.reshape(hazed_images, [1, df.FLAGS.input_image_height, df.FLAGS.input_image_width, dn.RGB_CHANNEL])
-        # temp_batch = tf.expand_dims(hazed_images, 0)
-        print('-------------------------------------------------------')
-        print(np.shape(hazed_images))
-        prediction = sess.run([train_op], feed_dict={placeholder: hazed_images})
+        temp_image_list = []
+        temp_image_list.append(hazed_images[index])
+        prediction = sess.run([train_op], feed_dict={placeholder: temp_image_list})
         # Run the session and get the prediction of one clear image
         dehazed_image = write_images_to_file(prediction, hazed_images_obj_list[index])
         psnr_value = tf_psnr(dehazed_image[0], clear_images[0])

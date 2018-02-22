@@ -90,7 +90,6 @@ def loss(result_batch, clear_image_batch):
     :return: The loss value will be added to tensorflow graph, return is actually not necessary
     but is left here to show respect to CIFAR-10 source code
     """
-    # TODO Lida Xu please redesign this function to achieve a better representation of loss
     loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch)))
     tf.add_to_collection('losses', loss)
 
