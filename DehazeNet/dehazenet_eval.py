@@ -112,47 +112,39 @@ def tf_psnr(im1, im2):
     return 10.0 * (tf.log(255.0 ** 2 / mse) / tf.log(10.0))
 
 
-def eval_once(saver, writer, train_op, summary_op, session, image, dict):
-    with session as sess:
-        hazed_image_batch_with_single_image = []
-        # Run the session and get the prediction of one clear image
-        hazed_image = im.open(image.path)
-        reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width), resample=im.BICUBIC)
-        reshape_hazed_image_arr = np.array(reshape_hazed_image)
-        float_hazed_image = tf.image.convert_image_dtype(reshape_hazed_image_arr, tf.float32)
-        prediction = sess.run([train_op], feed_dict=float_hazed_image)
-        dehazed_image = write_images_to_file(prediction, image)
-        clear_image = di.find_corres_clear_image(image, dict)
-        reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width), resample=im.BICUBIC)
-        psnr_value = tf_psnr(dehazed_image, reshape_clear_image)
-        format_str = ('%s: image: %s PSNR: %f')
-        print(format_str % (datetime.now(), image.path, psnr_value))
+def cal_psnr(im1, im2):
+    # assert pixel value range is 0-255 and type is uint8
+    mse = ((im1.astype(np.float) - im2.astype(np.float)) ** 2).mean()
+    psnr = 10 * np.log10(255 ** 2 / mse)
+    return psnr
 
-        # # Start the queue runners.
-        # coord = tf.train.Coordinator()
-        # try:
-        #     threads = []
-        #     for qr in tf.get_collection(tf.GraphKeys.QUEUE_RUNNERS):
-        #         threads.extend(qr.create_threads(sess, coord=coord, daemon=True,
-        #                                          start=True))
-        #
-        #     num_iter = int(math.ceil(df.FLAGS.num_examples / df.FLAGS.batch_size))
-        #     true_count = 0  # Counts the number of correct predictions.
-        #     total_sample_count = num_iter * df.FLAGS.batch_size
-        #     step = 0
-        #     while step < num_iter and not coord.should_stop():
-        #         predictions, ground_truth_images = sess.run([train_op])
-        #         write_images_to_file(predictions, ground_truth_images)
-        #         step += 1
-        #
-        #     summary = tf.Summary()
-        #     summary.ParseFromString(sess.run(summary_op))
-        #     writer.add_summary(summary, global_step)
-        # except Exception as e:  # pylint: disable=broad-except
-        #     coord.request_stop(e)
-        #
-        # coord.request_stop()
-        # coord.join(threads, stop_grace_period_secs=10)
+
+def eval_once(saver, writer, train_op, summary_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder):
+    with tf.Session() as sess:
+        ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            # Restores from checkpoint
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            # Assuming model_checkpoint_path looks something like:
+            #   /my-favorite-path/cifar10_train/model.ckpt-0,
+            # extract global_step from it.
+            global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
+        else:
+            print('No checkpoint file found')
+            return
+        # temp_batch = []
+        # temp_batch.append(hazed_images)
+        # tf.reshape(hazed_images, [1, df.FLAGS.input_image_height, df.FLAGS.input_image_width, dn.RGB_CHANNEL])
+        # temp_batch = tf.expand_dims(hazed_images, 0)
+        print('-------------------------------------------------------')
+        print(np.shape(hazed_images))
+        prediction = sess.run([train_op], feed_dict={placeholder: hazed_images})
+        # Run the session and get the prediction of one clear image
+        dehazed_image = write_images_to_file(prediction, hazed_images_obj_list[index])
+        psnr_value = tf_psnr(dehazed_image[0], clear_images[0])
+        psnr_result = sess.run(psnr_value)
+        format_str = ('%s: image: %s PSNR: %f')
+        print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_result))
 
 
 @DeprecationWarning
@@ -202,7 +194,10 @@ def _evaluate():
 
 def evaluate():
     with tf.Graph().as_default() as g:
-        # Read all images from directory and save into memory
+        # A list used to save all hazed images
+        hazed_image_list = []
+        clear_image_list = []
+        # Read all hazed images and clear images from directory and save into memory
         di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _clear_test_img_list,
                        _clear_test_directory, clear_image=True)
         if len(_clear_test_img_list) == 0:
@@ -212,69 +207,51 @@ def evaluate():
                        clear_dict=None, clear_image=False)
         if len(_hazed_test_img_list) == 0:
             raise RuntimeError("No image found! Please supply hazed images for training or eval ")
+        for image in _hazed_test_img_list:
+            # Read image from files and append them to the list
+            hazed_image = im.open(image.path)
+            reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
+                                                     resample=im.BICUBIC)
+            reshape_hazed_image_arr = np.array(reshape_hazed_image)
+            float_hazed_image = reshape_hazed_image_arr.astype('float32') / 255
+            hazed_image_list.append(float_hazed_image)
+            # arr = np.resize(arr, [224, 224])
+            clear_image = di.find_corres_clear_image(image, _clear_test_directory)
+            reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
+                                                     resample=im.BICUBIC)
+            reshape_clear_image_arr = np.array(reshape_clear_image)
+            float_clear_image = tf.image.convert_image_dtype(reshape_clear_image_arr, tf.float32)
+            clear_image_list.append(float_clear_image)
+
+        if len(clear_image_list) != len(hazed_image_list):
+            raise RuntimeError("hazed images cannot correspond to clear images!")
+
+        hazed_image = tf.placeholder(tf.float32,
+                                     shape=[1, df.FLAGS.input_image_height, df.FLAGS.input_image_width,
+                                            dn.RGB_CHANNEL])
+
+        logist = dmgt.inference(hazed_image)
         variable_averages = tf.train.ExponentialMovingAverage(
             dn.MOVING_AVERAGE_DECAY)
         variables_to_restore = variable_averages.variables_to_restore()
         saver = tf.train.Saver(variables_to_restore)
-        sess = tf.Session()
-        ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
-        if ckpt and ckpt.model_checkpoint_path:
-            # Restores from checkpoint
-            saver.restore(sess, ckpt.model_checkpoint_path)
-            # Assuming model_checkpoint_path looks something like:
-            #   /my-favorite-path/cifar10_train/model.ckpt-0,
-            # extract global_step from it.
-            global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
-        else:
-            print('No checkpoint file found')
-            return
-        for image in _hazed_test_img_list:
-            hazed_image = tf.placeholder(tf.float32, shape=[SINGLE_IMAGE_NUM, df.FLAGS.input_image_height, df.FLAGS.input_image_width, dn.RGB_CHANNEL])
-            logist = dmgt.inference(hazed_image)
-            # Build the summary operation based on the TF collection of Summaries.
-            summary_op = tf.summary.merge_all()
-            summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
-            # Evaluate for current image
-            eval_once(saver, summary_writer, logist, summary_op, session=sess, image=image, dict=_clear_test_directory)
+
+        # Build the summary operation based on the TF collection of Summaries.
+        summary_op = tf.summary.merge_all()
+        summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
+
+        for index in range(len(clear_image_list)):
+            eval_once(saver, summary_writer, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image)
 
 
 def write_images_to_file(logist, image):
+    array = np.reshape(logist[0], newshape=[df.FLAGS.input_image_height, df.FLAGS.input_image_width, dn.RGB_CHANNEL])
+    array = array * 255
+    arr1 = np.uint8(array)
+    result_image = im.fromarray(arr1, 'RGB')
     image_name_base = image.image_index
-    logist_to_save = logist[0] * 255
-    if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
-        predict_image_jpg = tf.image.encode_jpeg(logist_to_save, format='rgb')
-        with tf.gfile.GFile(df.FLAGS.clear_result_images_dir + image_name_base + '_pred.jpg',
-                            'wb') as f:
-            f.write(predict_image_jpg.eval())
-    elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
-        predict_image_jpg = tf.image.encode_png(logist_to_save, format='rgb')
-        with tf.gfile.GFile(df.FLAGS.clear_result_images_dir + image_name_base + '_pred.png',
-                            'wb') as f:
-            f.write(predict_image_jpg.eval())
-    return logist_to_save
-
-    # for i in range(len(logist)):
-    #     image_name_base = str(time.time())
-    #     logist_to_save = logist[i] * 255
-    #     gt_to_save = ground_truth_images[i] * 255
-    #     if df.FLAGS.save_image_type == IMAGE_JPG_FORMAT:
-    #         predict_image_jpg = tf.image.encode_jpeg(logist_to_save, format='rgb')
-    #         gt_image_jpg = tf.image.encode_jpeg(gt_to_save, format='rgb')
-    #         with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.jpg',
-    #                             'wb') as f:
-    #             f.write(predict_image_jpg.eval())
-    #         with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.jpg',
-    #                             'wb') as f:
-    #             f.write(gt_image_jpg.eval())
-    #     elif df.FLAGS.save_image_type == IMAGE_PNG_FORMAT:
-    #         predict_image_jpg = tf.image.encode_png(logist_to_save, format='rgb')
-    #         gt_image_jpg = tf.image.encode_png(gt_to_save, format='rgb')
-    #         with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_pred.png',
-    #                             'wb') as f:
-    #             f.write(predict_image_jpg.eval())
-    #         with tf.gfile.GFile(df.FLAGS.clear_test_images_dir + image_name_base + '_gt.png',
-    #                             'wb') as f:
-    #             f.write(gt_image_jpg.eval())
+    result_image.save(df.FLAGS.clear_result_images_dir + image_name_base + '_pred.jpg', 'jpeg')
+    return logist[0]
 
 
 def main(self):
