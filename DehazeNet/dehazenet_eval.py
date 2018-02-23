@@ -200,10 +200,12 @@ def eval_once(saver, writer, train_op, summary_op, hazed_images, clear_images, h
         prediction = sess.run([train_op], feed_dict={placeholder: temp_image_list})
         # Run the session and get the prediction of one clear image
         dehazed_image = write_images_to_file(prediction, hazed_images_obj_list[index])
-        psnr_value = tf_psnr(dehazed_image[0], clear_images[0])
+        psnr_value = tf_psnr(dehazed_image[0], clear_images[index])
         psnr_result = sess.run(psnr_value)
+        print('-----------------------------------------------------------------------------------------------------------------')
         format_str = ('%s: image: %s PSNR: %f')
         print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_result))
+        print('-----------------------------------------------------------------------------------------------------------------')
 
 
 @DeprecationWarning
@@ -269,17 +271,54 @@ def evaluate():
         for image in _hazed_test_img_list:
             # Read image from files and append them to the list
             hazed_image = im.open(image.path)
-            reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
-                                                     resample=im.BICUBIC)
+            shape = np.shape(hazed_image)
+            # left, upper, right, lower
+            if df.FLAGS.input_image_width % 2 != 0:
+                left = df.FLAGS.input_image_width//2
+                right = left + 1
+            else:
+                left = df.FLAGS.input_image_width / 2
+                right = left
+            if df.FLAGS.input_image_height % 2 != 0:
+                up = df.FLAGS.input_image_height // 2
+                low = up + 1
+            else:
+                up = df.FLAGS.input_image_height / 2
+                low = up
+            reshape_hazed_image = hazed_image.crop((shape[1]//2-left, shape[0]//2-up, shape[1]//2+right, shape[0]//2+low))
+            # reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
+            #                                          resample=im.BICUBIC)
+            # reshape_hazed_image = tf.image.resize_image_with_crop_or_pad(hazed_image,
+            #                                                              target_height=df.FLAGS.input_image_height,
+            #                                                              target_width=df.FLAGS.input_image_width)
             reshape_hazed_image_arr = np.array(reshape_hazed_image)
             float_hazed_image = reshape_hazed_image_arr.astype('float32') / 255
             hazed_image_list.append(float_hazed_image)
             # arr = np.resize(arr, [224, 224])
             clear_image = di.find_corres_clear_image(image, _clear_test_directory)
-            reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
-                                                     resample=im.BICUBIC)
+            # reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
+            #                                          resample=im.BICUBIC)
+            # reshape_clear_image = tf.image.resize_image_with_crop_or_pad(clear_image,
+            #                                                              target_height=df.FLAGS.input_image_height,
+            #                                                              target_width=df.FLAGS.input_image_width)
+            shape = np.shape(clear_image)
+            # left, upper, right, lower
+            if df.FLAGS.input_image_width % 2 != 0:
+                left = df.FLAGS.input_image_width // 2
+                right = left + 1
+            else:
+                left = df.FLAGS.input_image_width / 2
+                right = left
+            if df.FLAGS.input_image_height % 2 != 0:
+                up = df.FLAGS.input_image_height // 2
+                low = up + 1
+            else:
+                up = df.FLAGS.input_image_height / 2
+                low = up
+            reshape_clear_image = clear_image.crop(
+                (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
             reshape_clear_image_arr = np.array(reshape_clear_image)
-            float_clear_image = tf.image.convert_image_dtype(reshape_clear_image_arr, tf.float32)
+            float_clear_image = reshape_clear_image_arr.astype('float32') / 255
             clear_image_list.append(float_clear_image)
 
         if len(clear_image_list) != len(hazed_image_list):
@@ -289,12 +328,14 @@ def evaluate():
                                      shape=[1, df.FLAGS.input_image_height, df.FLAGS.input_image_width,
                                             dn.RGB_CHANNEL])
 
-        logist = dmgt.inference(hazed_image)
-        variable_averages = tf.train.ExponentialMovingAverage(
-            dn.MOVING_AVERAGE_DECAY)
-        variables_to_restore = variable_averages.variables_to_restore()
-        saver = tf.train.Saver(variables_to_restore)
-
+        # logist = dmgt.inference(hazed_image)
+        # variable_averages = tf.train.ExponentialMovingAverage(
+        #     dn.MOVING_AVERAGE_DECAY)
+        # variables_to_restore = variable_averages.variables_to_restore()
+        # saver = tf.train.Saver(variables_to_restore)
+        # TODO Zheng Liu please remove the comments of next two lines and add comment to upper five lines
+        logist = lz_net(hazed_image)
+        saver = tf.train.Saver()
         # Build the summary operation based on the TF collection of Summaries.
         summary_op = tf.summary.merge_all()
         summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)

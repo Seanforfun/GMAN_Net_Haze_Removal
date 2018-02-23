@@ -202,11 +202,41 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
     for image in hazed_image_list:
         try:
             hazed_image = im.open(image.path)
-            reshape_hazed_image = hazed_image.resize((height, width), resample=im.BICUBIC)
+            shape = np.shape(hazed_image)
+            if df.FLAGS.input_image_width % 2 != 0:
+                left = df.FLAGS.input_image_width // 2
+                right = left + 1
+            else:
+                left = df.FLAGS.input_image_width / 2
+                right = left
+            if df.FLAGS.input_image_height % 2 != 0:
+                up = df.FLAGS.input_image_height // 2
+                low = up + 1
+            else:
+                up = df.FLAGS.input_image_height / 2
+                low = up
+            reshape_hazed_image = hazed_image.crop(
+                (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
+            # reshape_hazed_image = hazed_image.resize((height, width), resample=im.BICUBIC)
             reshape_hazed_image_arr = np.array(reshape_hazed_image)
             hazed_image_raw = reshape_hazed_image_arr.tostring()
             clear_image = find_corres_clear_image(image, dict)
-            reshape_clear_image = clear_image.resize((height, width))
+            shape = np.shape(clear_image)
+            if df.FLAGS.input_image_width % 2 != 0:
+                left = df.FLAGS.input_image_width // 2
+                right = left + 1
+            else:
+                left = df.FLAGS.input_image_width / 2
+                right = left
+            if df.FLAGS.input_image_height % 2 != 0:
+                up = df.FLAGS.input_image_height // 2
+                low = up + 1
+            else:
+                up = df.FLAGS.input_image_height / 2
+                low = up
+                reshape_clear_image = clear_image.crop(
+                (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
+            # reshape_clear_image = clear_image.resize((height, width))
             reshape_clear_image_arr = np.array(reshape_clear_image)
             clear_image_raw = reshape_clear_image_arr.tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
