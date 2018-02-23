@@ -328,14 +328,14 @@ def evaluate():
                                      shape=[1, df.FLAGS.input_image_height, df.FLAGS.input_image_width,
                                             dn.RGB_CHANNEL])
 
-        # logist = dmgt.inference(hazed_image)
-        # variable_averages = tf.train.ExponentialMovingAverage(
-        #     dn.MOVING_AVERAGE_DECAY)
-        # variables_to_restore = variable_averages.variables_to_restore()
-        # saver = tf.train.Saver(variables_to_restore)
+        logist = dmgt.inference(hazed_image)
+        variable_averages = tf.train.ExponentialMovingAverage(
+            dn.MOVING_AVERAGE_DECAY)
+        variables_to_restore = variable_averages.variables_to_restore()
+        saver = tf.train.Saver(variables_to_restore)
         # TODO Zheng Liu please remove the comments of next two lines and add comment to upper five lines
-        logist = lz_net(hazed_image)
-        saver = tf.train.Saver()
+        # logist = lz_net(hazed_image)
+        # saver = tf.train.Saver()
         # Build the summary operation based on the TF collection of Summaries.
         summary_op = tf.summary.merge_all()
         summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
@@ -350,15 +350,14 @@ def write_images_to_file(logist, image):
     arr1 = np.uint8(array)
     result_image = im.fromarray(arr1, 'RGB')
     image_name_base = image.image_index
-    result_image.save(df.FLAGS.clear_result_images_dir + image_name_base + '_pred.jpg', 'jpeg')
+    result_image.save(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', 'jpeg')
     return logist[0]
 
 
 def main(self):
-    # if df.FLAGS.tfrecord_eval_rewrite:
-    #     if tf.gfile.Exists(df.FLAGS.tfrecord_eval_path):
-    #         tf.gfile.Remove(df.FLAGS.tfrecord_eval_path)
-    #         print('We delete the old TFRecord and will generate a new one in the program.')
+    if tf.gfile.Exists(df.FLAGS.clear_result_images_dir):
+        tf.gfile.DeleteRecursively(df.FLAGS.clear_result_images_dir)
+    tf.gfile.MakeDirs(df.FLAGS.clear_result_images_dir)
     evaluate()
 
 

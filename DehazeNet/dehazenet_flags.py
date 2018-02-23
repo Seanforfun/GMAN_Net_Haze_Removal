@@ -50,7 +50,7 @@ tf.app.flags.DEFINE_string('haze_test_images_dir', './HazeImages/TestImages',
 tf.app.flags.DEFINE_string('clear_test_images_dir', './ClearImages/TestImages',
                            """Path to the clear train images directory.""")
 tf.app.flags.DEFINE_string('clear_result_images_dir', './ClearResultImages/',
-                           """Path to the hazed test images directory.""")
+                           """Path to the dehazed test images directory.""")
 tf.app.flags.DEFINE_string('tfrecord_eval_path', './TFRecord/eval.tfrecords',
                            """Path to save the test TFRecord of the images""")
 tf.app.flags.DEFINE_boolean('tfrecord_eval_rewrite', False,
