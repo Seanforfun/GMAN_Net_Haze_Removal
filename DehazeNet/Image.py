@@ -19,5 +19,5 @@ class Image(object):
 
 
 if __name__ == '__main__':
-    print(str(time.time()) + 'asdsf')
-    pass
+    for i in range(-5, 6):
+        print(i)

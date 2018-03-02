@@ -19,6 +19,7 @@ from PIL import Image as im
 from Image import *
 import dehazenet as dehazenet
 import dehazenet_flags as df
+# import dehazenet_darkchannel as dd
 
 
 IMAGE_INDEX_BIT = 4
@@ -46,7 +47,7 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
         if os.path.isdir(os.path.join(dir, image_filename)):
             image_input(os.path.join(dir, image_filename), file_names, image_list, clear_dict, clear_image)
         elif image_filename.endswith(".png") \
-                | image_filename.endswith(".jpg"):
+                | image_filename.endswith(".jpg") | image_filename.endswith(".bmp"):
             file_name = os.path.join(dir, image_filename)
             current_image = Image(path=file_name)
             current_image.key = id(current_image)

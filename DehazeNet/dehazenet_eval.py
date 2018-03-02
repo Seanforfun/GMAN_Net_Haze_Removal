@@ -182,7 +182,7 @@ def cal_psnr(im1, im2):
     return psnr
 
 
-def eval_once(saver, writer, train_op, summary_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder):
+def eval_once(saver, writer, train_op, summary_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list):
     with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
@@ -202,6 +202,7 @@ def eval_once(saver, writer, train_op, summary_op, hazed_images, clear_images, h
         dehazed_image = write_images_to_file(prediction, hazed_images_obj_list[index])
         psnr_value = tf_psnr(dehazed_image[0], clear_images[index])
         psnr_result = sess.run(psnr_value)
+        psnr_list.append(psnr_result)
         print('-----------------------------------------------------------------------------------------------------------------')
         format_str = ('%s: image: %s PSNR: %f')
         print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_result))
@@ -256,6 +257,7 @@ def _evaluate():
 def evaluate():
     with tf.Graph().as_default() as g:
         # A list used to save all hazed images
+        psnr_list = []
         hazed_image_list = []
         clear_image_list = []
         # Read all hazed images and clear images from directory and save into memory
@@ -328,7 +330,8 @@ def evaluate():
                                      shape=[1, df.FLAGS.input_image_height, df.FLAGS.input_image_width,
                                             dn.RGB_CHANNEL])
 
-        logist = dmgt.inference(hazed_image)
+        # logist = dmgt.inference(hazed_image)
+        logist = lz_net(hazed_image)
         variable_averages = tf.train.ExponentialMovingAverage(
             dn.MOVING_AVERAGE_DECAY)
         variables_to_restore = variable_averages.variables_to_restore()
@@ -341,7 +344,15 @@ def evaluate():
         summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
 
         for index in range(len(clear_image_list)):
-            eval_once(saver, summary_writer, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image)
+            eval_once(saver, summary_writer, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image, psnr_list)
+
+        sum = 0
+        for psnr in psnr_list:
+            sum += psnr
+        psnr_avg = sum / len(psnr_list)
+        print('Average PSNR: ')
+        print(psnr_avg)
+
 
 
 def write_images_to_file(logist, image):
