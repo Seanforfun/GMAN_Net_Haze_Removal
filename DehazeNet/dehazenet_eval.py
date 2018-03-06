@@ -19,6 +19,7 @@ import skimage.io as io
 from skimage import transform
 from PIL import Image as im
 import math
+from Image import *
 
 import re
 from datetime import datetime
@@ -37,6 +38,44 @@ _hazed_test_img_list = []
 IMAGE_JPG_FORMAT = 'jpg'
 IMAGE_PNG_FORMAT = 'png'
 SINGLE_IMAGE_NUM = 1
+
+IMAGE_INDEX = 0
+IMAGE_A = 1
+IMAGE_BETA = 2
+
+_hazed_test_A_dict = {}
+_hazed_test_beta_dict = {}
+
+
+def eval_hazed_input(dir, file_names, image_list, dict_A, dict_beta):
+    if not dir:
+        raise ValueError('Please supply a data_dir')
+    file_list = os.listdir(dir)
+    for filename in file_list:
+        if os.path.isdir(os.path.join(dir, filename)):
+            eval_hazed_input(os.path.join(dir, filename), file_names, image_list, dict_A, dict_beta)
+            pass
+        elif filename.endswith(".png") | filename.endswith(".jpg") | filename.endswith(".bmp"):
+            file_names.append(filename)
+            temp_name = filename[0:(len(filename) - 4)]
+            hazed_image_split = temp_name.split('_')
+            file_name = os.path.join(dir, filename)
+            current_image = Image(path=file_name)
+            current_image.image_index = hazed_image_split[IMAGE_INDEX]
+            image_list.append(current_image)
+            if hazed_image_split[IMAGE_A] not in dict_A:
+                A_list = []
+                A_list.append(current_image)
+                dict_A[hazed_image_split[IMAGE_A]] = A_list
+            else:
+                dict_A[hazed_image_split[IMAGE_A]].append(current_image)
+            if hazed_image_split[IMAGE_BETA] not in dict_beta:
+                beta_list = []
+                beta_list.append(current_image)
+                dict_beta[hazed_image_split[IMAGE_BETA]] = beta_list
+            else:
+                dict_beta[hazed_image_split[IMAGE_BETA]].append(current_image)
+    return file_names, image_list, dict_A, dict_beta
 
 
 # TODO Zheng Liu's Place for evaluating his network
@@ -254,6 +293,164 @@ def _evaluate():
             time.sleep(df.FLAGS.eval_interval_secs)
 
 
+def evaluate_cartesian_product():
+    with tf.Graph().as_default() as g:
+        # A list used to save all hazed images
+        psnr_list = []
+        hazed_image_list = []
+        clear_image_list = []
+        # Read all hazed images and clear images from directory and save into memory
+        di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _clear_test_img_list,
+                       _clear_test_directory, clear_image=True)
+        if len(_clear_test_img_list) == 0:
+            raise RuntimeError("No image found! Please supply clear images for training or eval ")
+        # Hazed training image pre-process
+        eval_hazed_input(df.FLAGS.haze_test_images_dir, _hazed_test_file_names, _hazed_test_img_list, _hazed_test_A_dict, _hazed_test_beta_dict)
+
+        if len(_hazed_test_img_list) == 0:
+            raise RuntimeError("No image found! Please supply hazed images for training or eval ")
+        haze_image_obj_list = []
+        for k, v in _hazed_test_A_dict.items():
+            for image in v:
+                hazed_image = im.open(image.path)
+                haze_image_obj_list.append(image)
+                shape = np.shape(hazed_image)
+                # left, upper, right, lower
+                if df.FLAGS.input_image_width % 2 != 0:
+                    left = df.FLAGS.input_image_width // 2
+                    right = left + 1
+                else:
+                    left = df.FLAGS.input_image_width / 2
+                    right = left
+                if df.FLAGS.input_image_height % 2 != 0:
+                    up = df.FLAGS.input_image_height // 2
+                    low = up + 1
+                else:
+                    up = df.FLAGS.input_image_height / 2
+                    low = up
+                reshape_hazed_image = hazed_image.crop(
+                    (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
+                # reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
+                #                                          resample=im.BICUBIC)
+                # reshape_hazed_image = tf.image.resize_image_with_crop_or_pad(hazed_image,
+                #                                                              target_height=df.FLAGS.input_image_height,
+                #                                                              target_width=df.FLAGS.input_image_width)
+                reshape_hazed_image_arr = np.array(reshape_hazed_image)
+                float_hazed_image = reshape_hazed_image_arr.astype('float32') / 255
+                hazed_image_list.append(float_hazed_image)
+
+                # arr = np.resize(arr, [224, 224])
+                clear_image = di.find_corres_clear_image(image, _clear_test_directory)
+                # reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
+                #                                          resample=im.BICUBIC)
+                # reshape_clear_image = tf.image.resize_image_with_crop_or_pad(clear_image,
+                #                                                              target_height=df.FLAGS.input_image_height,
+                #                                                              target_width=df.FLAGS.input_image_width)
+                shape = np.shape(clear_image)
+                # left, upper, right, lower
+                if df.FLAGS.input_image_width % 2 != 0:
+                    left = df.FLAGS.input_image_width // 2
+                    right = left + 1
+                else:
+                    left = df.FLAGS.input_image_width / 2
+                    right = left
+                if df.FLAGS.input_image_height % 2 != 0:
+                    up = df.FLAGS.input_image_height // 2
+                    low = up + 1
+                else:
+                    up = df.FLAGS.input_image_height / 2
+                    low = up
+                reshape_clear_image = clear_image.crop(
+                    (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
+                reshape_clear_image_arr = np.array(reshape_clear_image)
+                float_clear_image = reshape_clear_image_arr.astype('float32') / 255
+                clear_image_list.append(float_clear_image)
+        for k, v in _hazed_test_beta_dict.items():
+            for image in v:
+                hazed_image = im.open(image.path)
+                haze_image_obj_list.append(image)
+                shape = np.shape(hazed_image)
+                # left, upper, right, lower
+                if df.FLAGS.input_image_width % 2 != 0:
+                    left = df.FLAGS.input_image_width // 2
+                    right = left + 1
+                else:
+                    left = df.FLAGS.input_image_width / 2
+                    right = left
+                if df.FLAGS.input_image_height % 2 != 0:
+                    up = df.FLAGS.input_image_height // 2
+                    low = up + 1
+                else:
+                    up = df.FLAGS.input_image_height / 2
+                    low = up
+                reshape_hazed_image = hazed_image.crop(
+                    (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
+                # reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
+                #                                          resample=im.BICUBIC)
+                # reshape_hazed_image = tf.image.resize_image_with_crop_or_pad(hazed_image,
+                #                                                              target_height=df.FLAGS.input_image_height,
+                #                                                              target_width=df.FLAGS.input_image_width)
+                reshape_hazed_image_arr = np.array(reshape_hazed_image)
+                float_hazed_image = reshape_hazed_image_arr.astype('float32') / 255
+                hazed_image_list.append(float_hazed_image)
+
+                # arr = np.resize(arr, [224, 224])
+                clear_image = di.find_corres_clear_image(image, _clear_test_directory)
+                # reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
+                #                                          resample=im.BICUBIC)
+                # reshape_clear_image = tf.image.resize_image_with_crop_or_pad(clear_image,
+                #                                                              target_height=df.FLAGS.input_image_height,
+                #                                                              target_width=df.FLAGS.input_image_width)
+                shape = np.shape(clear_image)
+                # left, upper, right, lower
+                if df.FLAGS.input_image_width % 2 != 0:
+                    left = df.FLAGS.input_image_width // 2
+                    right = left + 1
+                else:
+                    left = df.FLAGS.input_image_width / 2
+                    right = left
+                if df.FLAGS.input_image_height % 2 != 0:
+                    up = df.FLAGS.input_image_height // 2
+                    low = up + 1
+                else:
+                    up = df.FLAGS.input_image_height / 2
+                    low = up
+                reshape_clear_image = clear_image.crop(
+                    (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
+                reshape_clear_image_arr = np.array(reshape_clear_image)
+                float_clear_image = reshape_clear_image_arr.astype('float32') / 255
+                clear_image_list.append(float_clear_image)
+
+        if len(clear_image_list) != len(hazed_image_list):
+            raise RuntimeError("hazed images cannot correspond to clear images!")
+
+        hazed_image = tf.placeholder(tf.float32,
+                                     shape=[1, df.FLAGS.input_image_height, df.FLAGS.input_image_width,
+                                            dn.RGB_CHANNEL])
+
+        # logist = dmgt.inference(hazed_image)
+        logist = lz_net(hazed_image)
+        variable_averages = tf.train.ExponentialMovingAverage(
+            dn.MOVING_AVERAGE_DECAY)
+        variables_to_restore = variable_averages.variables_to_restore()
+        saver = tf.train.Saver(variables_to_restore)
+        # TODO Zheng Liu please remove the comments of next two lines and add comment to upper five lines
+        # logist = lz_net(hazed_image)
+        # saver = tf.train.Saver()
+        # Build the summary operation based on the TF collection of Summaries.
+        summary_op = tf.summary.merge_all()
+        summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
+        for index in range(len(clear_image_list)):
+            eval_once(saver, summary_writer, logist, summary_op, hazed_image_list, clear_image_list, haze_image_obj_list, index, hazed_image, psnr_list)
+
+        sum = 0
+        for psnr in psnr_list:
+            sum += psnr
+        psnr_avg = sum / len(psnr_list)
+        print('Average PSNR: ')
+        print(psnr_avg)
+
+
 def evaluate():
     with tf.Graph().as_default() as g:
         # A list used to save all hazed images
@@ -369,7 +566,7 @@ def main(self):
     if tf.gfile.Exists(df.FLAGS.clear_result_images_dir):
         tf.gfile.DeleteRecursively(df.FLAGS.clear_result_images_dir)
     tf.gfile.MakeDirs(df.FLAGS.clear_result_images_dir)
-    evaluate()
+    evaluate_cartesian_product()
 
 
 if __name__ == '__main__':
