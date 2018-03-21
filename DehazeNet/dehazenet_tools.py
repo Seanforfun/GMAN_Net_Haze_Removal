@@ -78,7 +78,17 @@ def conv(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], stride=[1
         x = tf.nn.relu(x, name='relu')
         return x
 
-
+def conv_eval(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1, 1, 1]):
+    with tf.variable_scope(layer_name, reuse=tf.AUTO_REUSE):
+        w = _variable_with_weight_decay(name='weights',
+                                             shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
+                                             stddev=5e-2, wd=0.0)
+        b = _variable_on_cpu(name='biases', shape=[out_channels],
+                             initializer=tf.constant_initializer(0.0))
+        x = tf.nn.conv2d(x, w, stride, padding='SAME', name='conv')
+        x = tf.nn.bias_add(x, b, name='bias_add')
+        x = tf.nn.relu(x, name='relu')
+        return x
 
 def conv_nonacti(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1, 1, 1]):
     '''
@@ -95,6 +105,20 @@ def conv_nonacti(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], s
         x = tf.nn.bias_add(x, b, name='bias_add_nonacti')
         return x
 
+def conv_nonacti_eval(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1, 1, 1]):
+    '''
+    Layer only do the job of convolution and bias adding
+    '''
+    with tf.variable_scope(layer_name, reuse=tf.AUTO_REUSE):
+        w = tf.get_variable(name='weights_nonacti',
+                            shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
+                            initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable(name='biases_nonacti',
+                            shape=[out_channels],
+                            initializer=tf.constant_initializer(0.0))
+        x = tf.nn.conv2d(x, w, stride, padding='SAME', name='conv_nonacti')
+        x = tf.nn.bias_add(x, b, name='bias_add_nonacti')
+        return x
 
 def acti_layer(x):
     '''
@@ -106,6 +130,20 @@ def acti_layer(x):
 
 def deconv(layer_name, x, in_channels, out_channels, output_shape=[32, 224, 224, 64], kernel_size=[3, 3], stride=[1, 1, 1, 1]):
     with tf.variable_scope(layer_name):
+        w = tf.get_variable(name='weights',
+                            shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
+                            initializer=tf.contrib.layers.xavier_initializer())  # default is uniform distribution initialization
+        # b = tf.get_variable(name='biases',
+        #                     shape=[out_channels],
+        #                     initializer=tf.constant_initializer(0.0))
+        x = tf.nn.conv2d_transpose(x, w, output_shape=output_shape, strides=stride, padding='SAME',
+                                   name='deconv')
+        # x = tf.nn.bias_add(x, b, name='bias_add')
+        # x = tf.nn.relu(x, name='relu')
+        return x
+
+def deconv_eval(layer_name, x, in_channels, out_channels, output_shape=[32, 224, 224, 64], kernel_size=[3, 3], stride=[1, 1, 1, 1]):
+    with tf.variable_scope(layer_name, reuse=tf.AUTO_REUSE):
         w = tf.get_variable(name='weights',
                             shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
                             initializer=tf.contrib.layers.xavier_initializer())  # default is uniform distribution initialization
