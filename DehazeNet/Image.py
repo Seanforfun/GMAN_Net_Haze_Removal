@@ -19,5 +19,5 @@ class Image(object):
 
 
 if __name__ == '__main__':
-    for i in range(-5, 6):
-        print(i)
+    for i in range(200):
+        print(np.random.randint(1,3))

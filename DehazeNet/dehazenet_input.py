@@ -200,43 +200,50 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
             raise ValueError('Failed to find image from path: ' + image.path)
     print('Start converting data into tfrecords...')
     writer = tf.python_io.TFRecordWriter(tfrecord_path)
+    left = 0
+    right = 0
+    up = 0
+    down = 0
     for image in hazed_image_list:
         try:
             hazed_image = im.open(image.path)
             shape = np.shape(hazed_image)
-            if df.FLAGS.input_image_width % 2 != 0:
-                left = df.FLAGS.input_image_width // 2
-                right = left + 1
-            else:
-                left = df.FLAGS.input_image_width / 2
-                right = left
-            if df.FLAGS.input_image_height % 2 != 0:
-                up = df.FLAGS.input_image_height // 2
-                low = up + 1
-            else:
-                up = df.FLAGS.input_image_height / 2
-                low = up
-            reshape_hazed_image = hazed_image.crop(
-                (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
+            left = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
+            right = left + df.FLAGS.input_image_width
+            up = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
+            down = up + df.FLAGS.input_image_height
+            # if df.FLAGS.input_image_width % 2 != 0:
+            #     left = df.FLAGS.input_image_width // 2
+            #     right = left + 1
+            # else:
+            #     left = df.FLAGS.input_image_width / 2
+            #     right = left
+            # if df.FLAGS.input_image_height % 2 != 0:
+            #     up = df.FLAGS.input_image_height // 2
+            #     low = up + 1
+            # else:
+            #     up = df.FLAGS.input_image_height / 2
+            #     low = up
+            # left, upper, right, lower
+            reshape_hazed_image = hazed_image.crop((left, up, right, down))
             # reshape_hazed_image = hazed_image.resize((height, width), resample=im.BICUBIC)
             reshape_hazed_image_arr = np.array(reshape_hazed_image)
             hazed_image_raw = reshape_hazed_image_arr.tostring()
             clear_image = find_corres_clear_image(image, dict)
             shape = np.shape(clear_image)
-            if df.FLAGS.input_image_width % 2 != 0:
-                left = df.FLAGS.input_image_width // 2
-                right = left + 1
-            else:
-                left = df.FLAGS.input_image_width / 2
-                right = left
-            if df.FLAGS.input_image_height % 2 != 0:
-                up = df.FLAGS.input_image_height // 2
-                low = up + 1
-            else:
-                up = df.FLAGS.input_image_height / 2
-                low = up
-                reshape_clear_image = clear_image.crop(
-                (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
+            # if df.FLAGS.input_image_width % 2 != 0:
+            #     left = df.FLAGS.input_image_width // 2
+            #     right = left + 1
+            # else:
+            #     left = df.FLAGS.input_image_width / 2
+            #     right = left
+            # if df.FLAGS.input_image_height % 2 != 0:
+            #     up = df.FLAGS.input_image_height // 2
+            #     low = up + 1
+            # else:
+            #     up = df.FLAGS.input_image_height / 2
+            #     low = up
+            reshape_clear_image = clear_image.crop((left, up, right, down))
             # reshape_clear_image = clear_image.resize((height, width))
             reshape_clear_image_arr = np.array(reshape_clear_image)
             clear_image_raw = reshape_clear_image_arr.tostring()

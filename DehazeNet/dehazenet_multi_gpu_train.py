@@ -39,7 +39,6 @@ def inference(hazed_batch):
     Please refer to CIFAR-10 CNN model to design our dehazenet.
     :return: A image batch after trained by CNN
     """
-    # TODO Lida Xu please re-write the CNN model
     with tf.name_scope('DehazeNet'):
         x = dt.conv('conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
         x = dt.conv('conv1_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
@@ -85,64 +84,90 @@ def inference(hazed_batch):
 
 
 def lz_training_net(hazed_batch):
-    with tf.name_scope('DehazeNet'):
-        x = dt.conv('conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x_s = dt.conv('DN_conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv1_2', x_s, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
-        # with tf.name_scope('pool1'):
-        #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
-        #
-        # with tf.name_scope('pool2'):
-        #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+    # with tf.name_scope('pool1'):
+    #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+    #
+    # with tf.name_scope('pool2'):
+    #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
 
-        x = dt.conv('upsampling_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
-        x = dt.conv('upsampling_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
+    x = dt.conv('upsampling_1', x, 64, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
+    x = dt.conv('upsampling_2', x, 128, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
 
-        x1 = dt.conv('conv1_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x1 = dt.conv('DN_conv1_3', x, 128, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv2_1', x1, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti('DN_conv2_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x1)
+    # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
 
-        x = dt.conv('conv2_1', x1, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_nonacti('conv2_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = tf.add(x, x1)
-        x = dt.acti_layer(x)
-        x2 = dt.conv('conv3_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv('conv3_2', x2, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_nonacti('conv3_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = tf.add(x, x2)
-        x = dt.acti_layer(x)
+    # x = tools.conv('DN_conv2_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv2_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
-        # x = tools.deconv('deconv3', x, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
-        x3 = dt.conv('conv4_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_nonacti('conv4_2', x3, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = tf.add(x, x3)
-        x = dt.acti_layer(x)
-        x = dt.conv('conv4_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x2 = dt.conv('DN_conv3_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv3_2', x2, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti('DN_conv3_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x2)
+    # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
 
-        x4 = dt.conv('conv5_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv('conv5_2', x4, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_nonacti('conv5_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = tf.add(x, x4)
-        x = dt.acti_layer(x)
+    # x = tools.conv('DN_conv3_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv3_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
-        x = dt.deconv('deconv1', x, 64, 64, output_shape=[35, 112, 112, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
+    x3 = dt.conv('DN_conv4_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv4_2', x3, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv4_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti('DN_conv4_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x3)
+    # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
 
-        x = dt.deconv('deconv2', x, 64, 64, output_shape=[35, 224, 224, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
+    x = dt.conv('DN_conv4_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
-        x = dt.conv('conv6_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x4 = dt.conv('DN_conv5_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv5_2', x4, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv5_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv('DN_conv5_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti('DN_conv5_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x4)
+    # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
 
-        x = dt.conv('conv6_2', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.deconv('DN_deconv1', x, 64, 64, output_shape=[35, 112, 112, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
 
-        # x = tf.layers.conv2d(x, output_channels, 3, padding='same')
-        # x = tools.conv('conv6_3', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        # x = tools.FC_layer('fc6', x, out_nodes=4096)
-        # with tf.name_scope('batch_norm1'):
+    # x5 = tools.conv('DN_conv6_1', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.conv('DN_conv6_2', x5, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.conv_nonacti('DN_conv6_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tf.add(x, x5)
+    # # x = tools.batch_norm(x)
+    # x = tools.acti_layer(x)
 
-        #     x = tools.batch_norm(x)
-        # x = tools.FC_layer('fc7', x, out_nodes=4096)
-        # with tf.name_scope('batch_norm2'):
-        #     x = tools.batch_norm(x)
-        # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
+    x = dt.deconv('DN_deconv2', x, 64, 64, output_shape=[35, 224, 224, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
+    x = dt.conv('DN_conv6_6', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti('DN_conv6_7', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x6 = tools.conv('DN_conv6_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.conv('DN_conv6_5', x6, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.conv_nonacti('DN_conv6_6', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x_s)
+    # # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
 
-        return x
+    x = dt.conv('DN_conv6_8', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+    # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.FC_layer('fc6', x, out_nodes=4096)
+    # with tf.name_scope('batch_norm1'):
+
+    #     x = tools.batch_norm(x)
+    # x = tools.FC_layer('fc7', x, out_nod
+    #
+    # es=4096)
+    # with tf.name_scope('batch_norm2'):
+    #     x = tools.batch_norm(x)
+    # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
+    return x
 
 
 def loss(result_batch, clear_image_batch):

@@ -124,7 +124,8 @@ def lz_net_eval(hazed_batch, height, width):
         x = dt.conv_eval('conv6_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
         x = dt.conv_eval('conv6_2', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-
+        # x = tf.saturate_cast(x, tf.float32)
+        # x = tf.image.adjust_brightness(x, 0.05)
         # x = tf.layers.conv2d(x, output_channels, 3, padding='same')
         # x = tools.conv('conv6_3', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
         # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
@@ -221,7 +222,7 @@ def cal_psnr(im1, im2):
     return psnr
 
 
-def eval_once(saver, writer, train_op, summary_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list, heights, widths):
+def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list, heights, widths):
     with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
@@ -543,8 +544,8 @@ def evaluate():
             # saver = tf.train.Saver()
             # Build the summary operation based on the TF collection of Summaries.
             summary_op = tf.summary.merge_all()
-            summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
-            eval_once(saver, summary_writer, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, height_list, width_list)
+            # summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
+            eval_once(saver, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, height_list, width_list)
 
         sum = 0
         for psnr in psnr_list:
