@@ -20,6 +20,7 @@ from skimage import transform
 from PIL import Image as im
 import math
 from Image import *
+import cv2
 
 import re
 from datetime import datetime
@@ -562,7 +563,8 @@ def write_images_to_file(logist, image, height, width):
     arr1 = np.uint8(array)
     result_image = im.fromarray(arr1, 'RGB')
     image_name_base = image.image_index
-    result_image.save(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', 'jpeg')
+    cv2.imwrite(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', result_image)
+    # result_image.save(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', 'jpeg')
     return logist[0]
 
 

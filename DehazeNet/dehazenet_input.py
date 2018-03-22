@@ -208,23 +208,16 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
         try:
             hazed_image = im.open(image.path)
             shape = np.shape(hazed_image)
-            left = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
+            if(0 >= shape[1] - df.FLAGS.input_image_width):
+                left = 0
+            else:
+                left = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
             right = left + df.FLAGS.input_image_width
-            up = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
+            if(0 >= shape[0] - df.FLAGS.input_image_height):
+                up = 0
+            else:
+                up = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
             down = up + df.FLAGS.input_image_height
-            # if df.FLAGS.input_image_width % 2 != 0:
-            #     left = df.FLAGS.input_image_width // 2
-            #     right = left + 1
-            # else:
-            #     left = df.FLAGS.input_image_width / 2
-            #     right = left
-            # if df.FLAGS.input_image_height % 2 != 0:
-            #     up = df.FLAGS.input_image_height // 2
-            #     low = up + 1
-            # else:
-            #     up = df.FLAGS.input_image_height / 2
-            #     low = up
-            # left, upper, right, lower
             reshape_hazed_image = hazed_image.crop((left, up, right, down))
             # reshape_hazed_image = hazed_image.resize((height, width), resample=im.BICUBIC)
             reshape_hazed_image_arr = np.array(reshape_hazed_image)
