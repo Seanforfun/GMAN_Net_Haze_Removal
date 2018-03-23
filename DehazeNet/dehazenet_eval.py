@@ -78,9 +78,95 @@ def eval_hazed_input(dir, file_names, image_list, dict_A, dict_beta):
                 dict_beta[hazed_image_split[IMAGE_BETA]].append(current_image)
     return file_names, image_list, dict_A, dict_beta
 
+def lz_net_eval(hazed_batch, height, width):
+    x_s = dt.conv_eval('DN_conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv1_2', x_s, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+    # with tf.name_scope('pool1'):
+    #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+    #
+    # with tf.name_scope('pool2'):
+    #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
+
+    x = dt.conv_eval('upsampling_1', x, 64, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
+    x = dt.conv_eval('upsampling_2', x, 128, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
+
+    x1 = dt.conv_eval('DN_conv1_3', x, 128, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv2_1', x1, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti_eval('DN_conv2_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x1)
+    # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
+
+    # x = tools.conv('DN_conv2_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv2_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+    x2 = dt.conv_eval('DN_conv3_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv3_2', x2, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti_eval('DN_conv3_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x2)
+    # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
+
+    # x = tools.conv('DN_conv3_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv3_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+    x3 = dt.conv_eval('DN_conv4_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv4_2', x3, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv4_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti_eval('DN_conv4_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x3)
+    # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
+
+    x = dt.conv_eval('DN_conv4_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+    x4 = dt.conv_eval('DN_conv5_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv5_2', x4, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv5_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv5_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti_eval('DN_conv5_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x4)
+    # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
+
+    x = dt.deconv_eval('DN_deconv1', x, 64, 64, output_shape=[1, int((height + 1)/2), int((width + 1)/2), 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
+
+    # x5 = tools.conv('DN_conv6_1', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.conv('DN_conv6_2', x5, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.conv_nonacti('DN_conv6_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tf.add(x, x5)
+    # # x = tools.batch_norm(x)
+    # x = tools.acti_layer(x)
+
+    x = dt.deconv_eval('DN_deconv2', x, 64, 64, output_shape=[1, height, width, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
+    x = dt.conv_eval('DN_conv6_6', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti_eval('DN_conv6_7', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x6 = tools.conv('DN_conv6_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.conv('DN_conv6_5', x6, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.conv_nonacti('DN_conv6_6', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = tf.add(x, x_s)
+    # # x = tools.batch_norm(x)
+    x = dt.acti_layer(x)
+
+    x = dt.conv_eval('DN_conv6_8', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
+    # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    # x = tools.FC_layer('fc6', x, out_nodes=4096)
+    # with tf.name_scope('batch_norm1'):
+
+    #     x = tools.batch_norm(x)
+    # x = tools.FC_layer('fc7', x, out_nod
+    #
+    # es=4096)
+    # with tf.name_scope('batch_norm2'):
+    #     x = tools.batch_norm(x)
+    # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
+    return x
+
 
 # TODO Zheng Liu's Place for evaluating his network
-def lz_net_eval(hazed_batch, height, width):
+def _lz_net_eval(hazed_batch, height, width):
     with tf.name_scope('DehazeNet'):
         x = dt.conv_eval('conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
@@ -217,7 +303,9 @@ def tf_psnr(im1, im2):
 
 
 def cal_psnr(im1, im2):
-    # assert pixel value range is 0-255 and type is uint8
+    '''
+        assert pixel value range is 0-255 and type is uint8
+    '''
     mse = ((im1.astype(np.float) - im2.astype(np.float)) ** 2).mean()
     psnr = 10 * np.log10(255 ** 2 / mse)
     return psnr
@@ -240,13 +328,14 @@ def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_ima
         temp_image_list.append(hazed_images[index])
         prediction = sess.run([train_op], feed_dict={placeholder[index]: temp_image_list})
         # Run the session and get the prediction of one clear image
-        dehazed_image = write_images_to_file(prediction, hazed_images_obj_list[index], heights[index], widths[index])
-        psnr_value = tf_psnr(dehazed_image[0], clear_images[index])
-        psnr_result = sess.run(psnr_value)
-        psnr_list.append(psnr_result)
+        dehazed_image = write_images_to_file(prediction, hazed_images_obj_list[index], heights[index], widths[index], sess)
+        clear_image = np.uint8(clear_images[index] * 255)
+        psnr_value = cal_psnr(dehazed_image, clear_image)
+        # psnr_result = sess.run(psnr_value)
+        psnr_list.append(psnr_value)
         print('-----------------------------------------------------------------------------------------------------------------')
         format_str = ('%s: image: %s PSNR: %f')
-        print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_result))
+        print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_value))
         print('-----------------------------------------------------------------------------------------------------------------')
 
 
@@ -481,51 +570,10 @@ def evaluate():
             hazed_image_placeholder = tf.placeholder(tf.float32,
                                          shape=[1, shape[0], shape[1], dn.RGB_CHANNEL])
             hazed_image_placeholder_list.append(hazed_image_placeholder)
-            # # left, upper, right, lower
-            # if df.FLAGS.input_image_width % 2 != 0:
-            #     left = df.FLAGS.input_image_width//2
-            #     right = left + 1
-            # else:
-            #     left = df.FLAGS.input_image_width / 2
-            #     right = left
-            # if df.FLAGS.input_image_height % 2 != 0:
-            #     up = df.FLAGS.input_image_height // 2
-            #     low = up + 1
-            # else:
-            #     up = df.FLAGS.input_image_height / 2
-            #     low = up
-            # reshape_hazed_image = hazed_image.crop((shape[1]//2-left, shape[0]//2-up, shape[1]//2+right, shape[0]//2+low))
-            # # reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
-            # #                                          resample=im.BICUBIC)
-            # # reshape_hazed_image = tf.image.resize_image_with_crop_or_pad(hazed_image,
-            # #                                                              target_height=df.FLAGS.input_image_height,
-            # #                                                              target_width=df.FLAGS.input_image_width)
             hazed_image_arr = np.array(hazed_image)
             float_hazed_image = hazed_image_arr.astype('float32') / 255
             hazed_image_list.append(float_hazed_image)
-            # arr = np.resize(arr, [224, 224])
             clear_image = di.find_corres_clear_image(image, _clear_test_directory)
-            # reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
-            #                                          resample=im.BICUBIC)
-            # reshape_clear_image = tf.image.resize_image_with_crop_or_pad(clear_image,
-            #                                                              target_height=df.FLAGS.input_image_height,
-            #                                                              target_width=df.FLAGS.input_image_width)
-            # shape = np.shape(clear_image)
-            # left, upper, right, lower
-            # if df.FLAGS.input_image_width % 2 != 0:
-            #     left = df.FLAGS.input_image_width // 2
-            #     right = left + 1
-            # else:
-            #     left = df.FLAGS.input_image_width / 2
-            #     right = left
-            # if df.FLAGS.input_image_height % 2 != 0:
-            #     up = df.FLAGS.input_image_height // 2
-            #     low = up + 1
-            # else:
-            #     up = df.FLAGS.input_image_height / 2
-            #     low = up
-            # reshape_clear_image = clear_image.crop(
-            #     (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
             clear_image_arr = np.array(clear_image)
             float_clear_image = clear_image_arr.astype('float32') / 255
             clear_image_list.append(float_clear_image)
@@ -557,15 +605,17 @@ def evaluate():
 
 
 
-def write_images_to_file(logist, image, height, width):
+def write_images_to_file(logist, image, height, width, sess):
     array = np.reshape(logist[0], newshape=[height, width, dn.RGB_CHANNEL])
     array = array * 255
-    arr1 = np.uint8(array)
+    # arr1 = np.uint8(array)
+    array = tf.saturate_cast(array, dtype=tf.uint8)
+    arr1 = sess.run(array)
     result_image = im.fromarray(arr1, 'RGB')
     image_name_base = image.image_index
-    cv2.imwrite(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', result_image)
-    # result_image.save(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', 'jpeg')
-    return logist[0]
+    # cv2.imwrite(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', arr1)
+    result_image.save(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', 'jpeg')
+    return arr1
 
 
 def main(self):
