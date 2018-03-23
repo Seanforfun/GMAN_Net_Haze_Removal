@@ -27,6 +27,10 @@ _clear_train_directory = {}
 _hazed_train_file_names = []
 _hazed_train_img_list = []
 
+_clear_test_file_names = []
+_clear_test_img_list = []
+_clear_test_directory = {}
+
 # Some Strings
 PROGRAM_START = "viva la vida ."
 PROGRAM_END = "We don't talk anymore."
@@ -280,6 +284,8 @@ def train():
 
         # Image pre-process
         if df.FLAGS.tfrecord_rewrite:
+            di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _clear_test_img_list,
+                           clear_dict=_clear_test_directory, clear_image=True)
             di.image_input(df.FLAGS.clear_train_images_dir, _clear_train_file_names, _clear_train_img_list,
                            _clear_train_directory, clear_image=True)
             if len(_clear_train_img_list) == 0:
@@ -292,7 +298,7 @@ def train():
 
             # Write data into a TFRecord saved in path ./TFRecord
             di.convert_to_tfrecord(_hazed_train_img_list, _hazed_train_file_names, _clear_train_directory,
-                                   df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_path)
+                                   df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_path, _clear_test_img_list)
             # Get queues for training image and ground truth, which is internally multi-thread safe
             # hazed_image_queue = di.hazed_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
             #                                                               df.FLAGS.input_image_width, _clear_train_directory,

@@ -19,5 +19,8 @@ class Image(object):
 
 
 if __name__ == '__main__':
-    for i in range(200):
-        print(np.random.randint(1,3))
+    a = [1,2,3,4,5,6]
+    for i in range(20):
+        if i in a:
+            continue
+        print(i)

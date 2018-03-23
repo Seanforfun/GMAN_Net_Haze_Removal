@@ -192,7 +192,11 @@ def bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, width, tfrecord_path):
+def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, width, tfrecord_path, test_image_list):
+    test_clear_index_list = []
+    for image in test_image_list:
+        test_clear_index = image.image_index
+        test_clear_index_list.append(test_clear_index)
     if len(hazed_image_list) == 0:
         raise RuntimeError("No example found for training! Please check your training data set!")
     for image in hazed_image_list:
@@ -206,6 +210,8 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
     down = 0
     for image in hazed_image_list:
         try:
+            if image.image_index in test_clear_index_list:
+                continue
             hazed_image = im.open(image.path)
             shape = np.shape(hazed_image)
             if(0 >= shape[1] - df.FLAGS.input_image_width):
