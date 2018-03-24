@@ -228,27 +228,6 @@ def _lz_net_eval(hazed_batch, height, width):
         return x
 
 
-@DeprecationWarning
-def convert_to_tfrecord(hazed_image_list, height, width):
-    print('Start converting data into tfrecords...')
-    writer = tf.python_io.TFRecordWriter(df.FLAGS.tfrecord_eval_path)
-    for image in hazed_image_list:
-        try:
-            if not tf.gfile.Exists(image.path):
-                raise ValueError("Image does not exist: " + image.path)
-            hazed_image = im.open(image.path)
-            reshape_hazed_image = hazed_image.resize((height, width))
-            reshape_hazed_image_arr = np.array(reshape_hazed_image)
-            hazed_image_raw = reshape_hazed_image_arr.tostring()
-            example = tf.train.Example(features=tf.train.Features(feature={
-                'hazed_image_raw': di.bytes_feature(hazed_image_raw)}))
-            writer.write(example.SerializeToString())
-        except IOError as e:
-            raise RuntimeError('Could not read:', image.path)
-    writer.close();
-    print('Transform done!')
-
-
 def _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuffle=True):
     num_preprocess_threads = 8
 
@@ -270,30 +249,6 @@ def _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuf
     # Display the training images in the visualizer.
     tf.summary.image('hazed_images', h_images)
     return h_images, c_images
-
-
-@DeprecationWarning
-def read_eval_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width):
-    if not tf.gfile.Exists(tfrecords_filename):
-        raise ValueError("Fail to load TFRecord from dictionary: " + tfrecords_filename)
-    filename_queue = tf.train.string_input_producer([tfrecords_filename])
-    reader = tf.TFRecordReader()
-    _, serialized_example = reader.read(filename_queue)
-    img_features = tf.parse_single_example(
-        serialized_example,
-        features={
-            'hazed_image_raw': tf.FixedLenFeature([], tf.string),
-        })
-    hazed_image = tf.decode_raw(img_features['hazed_image_raw'], tf.uint8)
-    hazed_image = tf.reshape(hazed_image, [height, width, 3])
-    hazed_image = tf.image.per_image_standardization(hazed_image)
-    '''
-        I am titanium.
-    '''
-    min_fraction_of_examples_in_queue = 0.4
-    min_queue_examples = int(di.NUM_EXAMPLES_PER_EPOCH_FOR_EVAL *
-                             min_fraction_of_examples_in_queue)
-    return _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuffle=True)
 
 
 def tf_psnr(im1, im2):
@@ -337,51 +292,6 @@ def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_ima
         format_str = ('%s: image: %s PSNR: %f')
         print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_value))
         print('-----------------------------------------------------------------------------------------------------------------')
-
-
-@DeprecationWarning
-def _evaluate():
-    with tf.Graph().as_default() as g:
-        # 1.Create TFRecord for evaluate data
-        if df.FLAGS.tfrecord_eval_rewrite:
-            # 1.1 Read images from directory and save to memory
-            di.image_input(df.FLAGS.haze_test_images_dir, _hazed_test_file_names, _hazed_test_img_list,
-                           clear_dict=None, clear_image=False)
-            if len(_hazed_test_img_list) == 0:
-                raise RuntimeError("No image found! Please supply hazed images for eval ")
-            di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _hazed_test_img_list,
-                           clear_dict=_clear_test_directory, clear_image=True)
-            # 1.2 Save images into TFRecord
-            di.convert_to_tfrecord(_hazed_test_img_list, _hazed_test_file_names, _clear_test_directory,
-                                   df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_eval_path)
-        # 2.Read data from TFRecord
-        hazed_image, clear_image = di.read_tfrecords_and_add_2_queue(df.FLAGS.tfrecord_eval_path, df.FLAGS.batch_size,
-                                                                     df.FLAGS.input_image_height,
-                                                                     df.FLAGS.input_image_width)
-        batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue([hazed_image, clear_image], capacity=2 * df.FLAGS.num_gpus)
-
-        hazed_image_batch, clear_image_batch = batch_queue.dequeue()
-        # 3.1 Train a batch of image and get a tensor used to represent the images
-        ground_truth_image_tensor = tf.squeeze(clear_image_batch, [0])
-        logist = dmgt.inference(hazed_image_batch)
-
-        variable_averages = tf.train.ExponentialMovingAverage(
-            dn.MOVING_AVERAGE_DECAY)
-        variables_to_restore = variable_averages.variables_to_restore()
-        saver = tf.train.Saver(variables_to_restore)
-
-        # Build the summary operation based on the TF collection of Summaries.
-        summary_op = tf.summary.merge_all()
-
-        summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
-
-        train_op = tf.group(logist, ground_truth_image_tensor)
-
-        while True:
-            eval_once(saver, summary_writer, train_op, summary_op)
-            if df.FLAGS.run_once:
-                break
-            time.sleep(df.FLAGS.eval_interval_secs)
 
 
 def evaluate_cartesian_product():

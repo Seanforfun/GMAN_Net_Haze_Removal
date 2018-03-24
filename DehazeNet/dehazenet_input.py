@@ -64,22 +64,6 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
         file_names.append(image.path)
     return file_names, image_list, clear_dict
 
-@DeprecationWarning
-def _read_image(filename):
-    """
-    :param image_list: A image list which saves the image objects
-    :param file_names: A file name list(Optional)
-    :return: A image list whose image_tensor is filled
-    """
-    if filename is None:
-        raise RuntimeError("Fail to load path from dictionary")
-    image_content = tf.read_file(filename)
-    if filename.endswith(".png"):
-        tensor = tf.image.decode_png(image_content, channels=dehazenet.RGB_CHANNEL, dtype=tf.uint8)
-    elif filename.endswith("jpg"):
-        tensor = tf.image.decode_jpeg(image_content, channels=dehazenet.RGB_CHANNEL)
-    return tensor
-
 
 def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=True):
     num_preprocess_threads = 8
@@ -104,20 +88,6 @@ def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_si
     tf.summary.image('clear_images', c_images)
     return h_images, c_images
 
-@DeprecationWarning
-def _image_pre_process(image, height, width, train=False):
-    image = tf.reshape(image, [height, width, 3])
-    image = tf.cast(image, tf.float32)
-    if train:
-        image = tf.image.random_brightness(image, max_delta=63)
-        image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
-    # Subtract off the mean and divide by the variance of the pixels.
-    float_image = tf.image.per_image_standardization(image)
-    # Resize the input image
-    # tf.image.resize_images(float_image, [height, width])
-    # float_image.set_shape([height, width, 3])
-    return float_image
-
 
 def find_corres_clear_image(image, clear_dict):
     clear_image_obj = clear_dict[image.image_index]
@@ -125,67 +95,6 @@ def find_corres_clear_image(image, clear_dict):
         raise RuntimeError("Fail to load path from dictionary: " + clear_image_obj.path)
     clear_image = im.open(clear_image_obj.path)
     return clear_image
-
-@DeprecationWarning
-def _find_corres_clear_image_filenames(hazed_image_list, clear_dict):
-    clear_image_name_list = []
-    for image in hazed_image_list:
-        clear_image_obj = clear_dict[image.image_index]
-        clear_image_name_list.append(clear_image_obj.path)
-    return clear_image_name_list
-
-@DeprecationWarning
-def hazed_get_distorted_image(image_batch_list, height, width, Train=True, file_names=None):
-    """
-    :param image_batch_list: A list used to save a batch of image objects
-    :param height: The height of our training image
-    :param width: The width of our training image
-    :param file_names: A batch of images to be trained(Optional)
-    :return: A batch list of Image object whose image_tensor are filled
-    :function: Used to read and distort a batch of images
-    """
-    if isinstance(height, int) & isinstance(width, int):
-        for image in image_batch_list:
-            if not tf.gfile.Exists(image.path):
-                raise ValueError('Failed to find image from path: ' + image.path)
-        filename_queue = tf.train.string_input_producer(file_names, shuffle=False)
-        hazed_original_image = _read_image(filename_queue)
-        reshape_hazed_image = _image_pre_process(hazed_original_image, height, width)
-        resize_hazed = tf.image.resize_images(reshape_hazed_image, [height, width])
-        min_fraction_of_examples_in_queue = 0.1
-        min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
-                                 min_fraction_of_examples_in_queue)
-        return _generate_image_batch(resize_hazed, min_queue_examples, df.FLAGS.batch_size,
-                                     shuffle=False)
-    else:
-        raise RuntimeError('Error input of method distorted_image')
-
-@DeprecationWarning
-def clear_get_distorted_image(hazed_image_list, height, width, dict, Train=False, file_names=None):
-    """
-    :param image_batch_list: A list used to save a batch of image objects
-    :param height: The height of our training image
-    :param width: The width of our training image
-    :param file_names: A batch of images to be trained(Optional)
-    :return: A batch list of Image object whose image_tensor are filled
-    :function: Used to read and distort a batch of images
-    """
-    if isinstance(height, int) & isinstance(width, int):
-        for image in hazed_image_list:
-            if not tf.gfile.Exists(image.image_index):
-                raise ValueError('Failed to find image from path: ' + image.image_index)
-        clear_image_names = _find_corres_clear_image_filenames(hazed_image_list, dict)
-        clear_filename_queue = tf.train.string_input_producer(clear_image_names, shuffle=False)
-        clear_original_image = _read_image(clear_filename_queue)
-        reshape_clear_image = _image_pre_process(clear_original_image, height, width, train=False)
-        resize_clear = tf.image.resize_images(reshape_clear_image, [height, width])
-        min_fraction_of_examples_in_queue = 0.4
-        min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
-                                 min_fraction_of_examples_in_queue)
-        return _generate_image_batch(resize_clear, min_queue_examples, df.FLAGS.batch_size,
-                                     shuffle=Train)
-    else:
-        raise RuntimeError('Error input of method distorted_image')
 
 
 def bytes_feature(value):
@@ -205,9 +114,13 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
     print('Start converting data into tfrecords...')
     writer = tf.python_io.TFRecordWriter(tfrecord_path)
     left = 0
+    left1 = 0
     right = 0
+    right1 = 0
     up = 0
+    up1 = 0
     down = 0
+    down1 = 0
     for image in hazed_image_list:
         try:
             if image.image_index in test_clear_index_list:
@@ -216,40 +129,43 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
             shape = np.shape(hazed_image)
             if(0 >= shape[1] - df.FLAGS.input_image_width):
                 left = 0
+                left1 = 0
             else:
                 left = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
+                left1 = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
             right = left + df.FLAGS.input_image_width
+            right1 = left1 + df.FLAGS.input_image_width
             if(0 >= shape[0] - df.FLAGS.input_image_height):
                 up = 0
+                up1 = 0
             else:
                 up = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
+                up1 = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
             down = up + df.FLAGS.input_image_height
+            down1 = up1 + df.FLAGS.input_image_height
             reshape_hazed_image = hazed_image.crop((left, up, right, down))
-            # reshape_hazed_image = hazed_image.resize((height, width), resample=im.BICUBIC)
+            reshape_hazed_image1 = hazed_image.crop((left1, up1, right1, down1))
             reshape_hazed_image_arr = np.array(reshape_hazed_image)
+            reshape_hazed_image_arr1 = np.array(reshape_hazed_image1)
             hazed_image_raw = reshape_hazed_image_arr.tostring()
+            hazed_image_raw1 = reshape_hazed_image_arr1.tostring()
             clear_image = find_corres_clear_image(image, dict)
-            shape = np.shape(clear_image)
-            # if df.FLAGS.input_image_width % 2 != 0:
-            #     left = df.FLAGS.input_image_width // 2
-            #     right = left + 1
-            # else:
-            #     left = df.FLAGS.input_image_width / 2
-            #     right = left
-            # if df.FLAGS.input_image_height % 2 != 0:
-            #     up = df.FLAGS.input_image_height // 2
-            #     low = up + 1
-            # else:
-            #     up = df.FLAGS.input_image_height / 2
-            #     low = up
             reshape_clear_image = clear_image.crop((left, up, right, down))
+            reshape_clear_image1 = clear_image.crop((left1, up1, right1, down1))
             # reshape_clear_image = clear_image.resize((height, width))
             reshape_clear_image_arr = np.array(reshape_clear_image)
             clear_image_raw = reshape_clear_image_arr.tostring()
+            reshape_clear_image_arr1 = np.array(reshape_clear_image1)
+            clear_image_raw1 = reshape_clear_image_arr1.tostring()
             example = tf.train.Example(features=tf.train.Features(feature={
                 'hazed_image_raw': bytes_feature(hazed_image_raw),
                 'clear_image_raw': bytes_feature(clear_image_raw)}))
+            example1 = tf.train.Example(features=tf.train.Features(feature={
+                'hazed_image_raw': bytes_feature(hazed_image_raw1),
+                'clear_image_raw': bytes_feature(clear_image_raw1)}))
             writer.write(example.SerializeToString())
+            writer.write(example1.SerializeToString())
+
         except IOError as e:
             raise RuntimeError('Could not read:', image.path)
     writer.close()
@@ -296,7 +212,7 @@ if __name__ == '__main__':
     print(file_names)
     print(image_list)
     print(clear_dict)
-    image_list = _read_image(image_list)
+    # image_list = _read_image(image_list)
     for img in image_list:
         print(tf.size(img.image_tensor))
     a = [1,2,3]
