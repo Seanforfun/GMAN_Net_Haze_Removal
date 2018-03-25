@@ -24,7 +24,7 @@ import dehazenet_flags as df
 
 IMAGE_INDEX_BIT = 4
 # TODO Need to change value before real operations
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 69965
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 192780 * 2
 NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
 IMAGE_SUFFIX_MIN_LENGTH = 4
 
@@ -149,10 +149,10 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
             reshape_hazed_image_arr1 = np.array(reshape_hazed_image1)
             hazed_image_raw = reshape_hazed_image_arr.tostring()
             hazed_image_raw1 = reshape_hazed_image_arr1.tostring()
+            #################Getting corresponding clear images#########################
             clear_image = find_corres_clear_image(image, dict)
             reshape_clear_image = clear_image.crop((left, up, right, down))
             reshape_clear_image1 = clear_image.crop((left1, up1, right1, down1))
-            # reshape_clear_image = clear_image.resize((height, width))
             reshape_clear_image_arr = np.array(reshape_clear_image)
             clear_image_raw = reshape_clear_image_arr.tostring()
             reshape_clear_image_arr1 = np.array(reshape_clear_image1)
@@ -196,7 +196,7 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float16)
     else:
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float32)
-    min_fraction_of_examples_in_queue = 0.4
+    min_fraction_of_examples_in_queue = 0.1
     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)
     return _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=False)

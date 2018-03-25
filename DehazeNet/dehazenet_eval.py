@@ -140,8 +140,8 @@ def lz_net_eval(hazed_batch, height, width):
     # x = tools.acti_layer(x)
 
     x = dt.deconv_eval('DN_deconv2', x, 64, 64, output_shape=[1, height, width, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
-    x = dt.conv_eval('DN_conv6_6', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    x = dt.conv_nonacti_eval('DN_conv6_7', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv6_6', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti_eval('DN_conv6_7', x, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     # x6 = tools.conv('DN_conv6_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     # x = tools.conv('DN_conv6_5', x6, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     # x = tools.conv_nonacti('DN_conv6_6', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])

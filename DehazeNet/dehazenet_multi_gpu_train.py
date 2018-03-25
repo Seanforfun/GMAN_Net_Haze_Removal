@@ -299,14 +299,6 @@ def train():
             # Write data into a TFRecord saved in path ./TFRecord
             di.convert_to_tfrecord(_hazed_train_img_list, _hazed_train_file_names, _clear_train_directory,
                                    df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_path, _clear_test_img_list)
-            # Get queues for training image and ground truth, which is internally multi-thread safe
-            # hazed_image_queue = di.hazed_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
-            #                                                               df.FLAGS.input_image_width, _clear_train_directory,
-            #                                                               file_names=_hazed_train_file_names)
-            # hazed_batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-            #     [hazed_image_queue], capacity=2 * df.FLAGS.num_gpus)
-            # clear_image_queue = di.clear_get_distorted_image(_hazed_train_img_list, df.FLAGS.input_image_height,
-            #                                                  df.FLAGS.input_image_width, _clear_train_directory)
         hazed_image, clear_image = di.read_tfrecords_and_add_2_queue(df.FLAGS.tfrecord_path, df.FLAGS.batch_size,
                                                                      df.FLAGS.input_image_height, df.FLAGS.input_image_width)
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
