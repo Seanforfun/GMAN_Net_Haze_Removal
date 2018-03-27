@@ -27,6 +27,8 @@ tf.app.flags.DEFINE_string('tfrecord_path', './TFRecord/train.tfrecords',
                            """Path to save the TFRecord of the images""")
 tf.app.flags.DEFINE_boolean('tfrecord_rewrite', False,
                             """Whether to delete and rewrite the TFRecord.""")
+tf.app.flags.DEFINE_string('PerceNet_dir', './PerceNetModel',
+                           """Path to save the PerceNet Model""")
 
 
 # Some systematic parameters

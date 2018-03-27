@@ -16,6 +16,7 @@ import dehazenet as dn
 import dehazenet_flags as df
 import numpy as np
 import skimage.io as io
+from  skimage import measure
 from skimage import transform
 from PIL import Image as im
 import math
@@ -140,8 +141,8 @@ def lz_net_eval(hazed_batch, height, width):
     # x = tools.acti_layer(x)
 
     x = dt.deconv_eval('DN_deconv2', x, 64, 64, output_shape=[1, height, width, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
-    x = dt.conv_eval('DN_conv6_6', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    x = dt.conv_nonacti_eval('DN_conv6_7', x, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_eval('DN_conv6_6', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+    x = dt.conv_nonacti_eval('DN_conv6_7', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     # x6 = tools.conv('DN_conv6_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     # x = tools.conv('DN_conv6_5', x6, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     # x = tools.conv_nonacti('DN_conv6_6', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
@@ -266,7 +267,7 @@ def cal_psnr(im1, im2):
     return psnr
 
 
-def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list, heights, widths):
+def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list, ssim_list, heights, widths):
     with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
@@ -286,12 +287,13 @@ def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_ima
         dehazed_image = write_images_to_file(prediction, hazed_images_obj_list[index], heights[index], widths[index], sess)
         clear_image = np.uint8(clear_images[index] * 255)
         psnr_value = cal_psnr(dehazed_image, clear_image)
-        # psnr_result = sess.run(psnr_value)
+        ssim_value = measure.compare_ssim(dehazed_image, clear_image, multichannel=True)
+        ssim_list.append(ssim_value)
         psnr_list.append(psnr_value)
-        print('-----------------------------------------------------------------------------------------------------------------')
-        format_str = ('%s: image: %s PSNR: %f')
-        print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_value))
-        print('-----------------------------------------------------------------------------------------------------------------')
+        print('-------------------------------------------------------------------------------------------------------------------------------')
+        format_str = ('%s: image: %s PSNR: %f; SSIM: %f')
+        print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_value, ssim_value))
+        print('-------------------------------------------------------------------------------------------------------------------------------')
 
 
 def evaluate_cartesian_product():
@@ -456,6 +458,7 @@ def evaluate():
     with tf.Graph().as_default() as g:
         # A list used to save all hazed images
         psnr_list = []
+        ssim_list = []
         hazed_image_list = []
         clear_image_list = []
         hazed_image_placeholder_list = []
@@ -504,15 +507,22 @@ def evaluate():
             # Build the summary operation based on the TF collection of Summaries.
             summary_op = tf.summary.merge_all()
             # summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
-            eval_once(saver, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, height_list, width_list)
+            eval_once(saver, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
 
-        sum = 0
-        for psnr in psnr_list:
-            sum += psnr
-        psnr_avg = sum / len(psnr_list)
-        print('Average PSNR: ')
-        print(psnr_avg)
+        psnr_avg = cal_average(psnr_list)
+        format_str = ('%s: Average PSNR: %5f')
+        print(format_str % (datetime.now(), psnr_avg))
+        ssim_avg = cal_average(ssim_list)
+        format_str = ('%s: Average SSIM: %5f')
+        print(format_str % (datetime.now(), ssim_avg))
 
+
+def cal_average(list):
+    sum = 0
+    for num in list:
+        sum += num
+    avg = sum / len(list)
+    return avg
 
 
 def write_images_to_file(logist, image, height, width, sess):

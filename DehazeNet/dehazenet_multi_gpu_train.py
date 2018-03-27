@@ -181,6 +181,24 @@ def loss(result_batch, clear_image_batch):
     :return: The loss value will be added to tensorflow graph, return is actually not necessary
     but is left here to show respect to CIFAR-10 source code
     """
+
+    # vgg_per = Vgg16()
+    # vgg_per.build(result_batch)
+    # vgg_tru = Vgg16()
+    # vgg_tru.build(clear_image_batch)
+    #
+    # output_per_1 = vgg_per.conv3_3
+    # output_tru_1 = vgg_tru.conv3_3
+    #
+    # output_per_2 = vgg_per.conv1_1
+    # output_tru_2 = vgg_tru.conv1_1
+    #
+    # output_per_3 = vgg_per.conv2_2
+    # output_tru_3 = vgg_tru.conv2_2
+
+    # per_loss = (tf.reduce_mean(tf.square(tf.subtract(output_per_1, output_tru_1))) / 3136) + \
+    #            (tf.reduce_mean(tf.square(tf.subtract(output_per_2, output_tru_2))) / 50176) + \
+    #            (tf.reduce_mean(tf.square(tf.subtract(output_per_3, output_tru_3))) / 12544)
     loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch)))
     tf.add_to_collection('losses', loss)
 

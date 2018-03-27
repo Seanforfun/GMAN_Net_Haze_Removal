@@ -196,7 +196,7 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float16)
     else:
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float32)
-    min_fraction_of_examples_in_queue = 0.1
+    min_fraction_of_examples_in_queue = 0.08
     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)
     return _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=False)

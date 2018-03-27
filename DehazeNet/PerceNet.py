@@ -4,18 +4,19 @@ import os
 import numpy as np
 import tensorflow as tf
 import time
+import dehazenet_flags as df
 
 VGG_MEAN = [103.939, 116.779, 123.68]
 
 
 class Vgg16:
-    def __init__(self, vgg16_npy_path=None):
+    def __init__(self, vgg16_npy_path=df.FLAGS.PerceNet_dir):
         if vgg16_npy_path is None:
             path = inspect.getfile(Vgg16)
+            print(os.path.join(path, os.pardir))
             path = os.path.abspath(os.path.join(path, os.pardir))
             path = os.path.join(path, "vgg16.npy")
             vgg16_npy_path = path
-            print(path)
 
         self.data_dict = np.load(vgg16_npy_path, encoding='latin1').item()
         print("npy file loaded")
@@ -122,3 +123,7 @@ class Vgg16:
 
     def get_fc_weight(self, name):
         return tf.constant(self.data_dict[name][0], name="weights")
+
+
+if __name__ == '__main__':
+    vgg_per = Vgg16()
