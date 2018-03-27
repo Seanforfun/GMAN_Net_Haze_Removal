@@ -273,9 +273,6 @@ def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_ima
         if ckpt and ckpt.model_checkpoint_path:
             # Restores from checkpoint
             saver.restore(sess, ckpt.model_checkpoint_path)
-            # Assuming model_checkpoint_path looks something like:
-            #   /my-favorite-path/cifar10_train/model.ckpt-0,
-            # extract global_step from it.
             global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]
         else:
             print('No checkpoint file found')
@@ -333,22 +330,12 @@ def evaluate_cartesian_product():
                     low = up
                 reshape_hazed_image = hazed_image.crop(
                     (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
-                # reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
-                #                                          resample=im.BICUBIC)
-                # reshape_hazed_image = tf.image.resize_image_with_crop_or_pad(hazed_image,
-                #                                                              target_height=df.FLAGS.input_image_height,
-                #                                                              target_width=df.FLAGS.input_image_width)
                 reshape_hazed_image_arr = np.array(reshape_hazed_image)
                 float_hazed_image = reshape_hazed_image_arr.astype('float32') / 255
                 hazed_image_list.append(float_hazed_image)
 
                 # arr = np.resize(arr, [224, 224])
                 clear_image = di.find_corres_clear_image(image, _clear_test_directory)
-                # reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
-                #                                          resample=im.BICUBIC)
-                # reshape_clear_image = tf.image.resize_image_with_crop_or_pad(clear_image,
-                #                                                              target_height=df.FLAGS.input_image_height,
-                #                                                              target_width=df.FLAGS.input_image_width)
                 shape = np.shape(clear_image)
                 # left, upper, right, lower
                 if df.FLAGS.input_image_width % 2 != 0:
@@ -388,22 +375,12 @@ def evaluate_cartesian_product():
                     low = up
                 reshape_hazed_image = hazed_image.crop(
                     (shape[1] // 2 - left, shape[0] // 2 - up, shape[1] // 2 + right, shape[0] // 2 + low))
-                # reshape_hazed_image = hazed_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
-                #                                          resample=im.BICUBIC)
-                # reshape_hazed_image = tf.image.resize_image_with_crop_or_pad(hazed_image,
-                #                                                              target_height=df.FLAGS.input_image_height,
-                #                                                              target_width=df.FLAGS.input_image_width)
                 reshape_hazed_image_arr = np.array(reshape_hazed_image)
                 float_hazed_image = reshape_hazed_image_arr.astype('float32') / 255
                 hazed_image_list.append(float_hazed_image)
 
                 # arr = np.resize(arr, [224, 224])
                 clear_image = di.find_corres_clear_image(image, _clear_test_directory)
-                # reshape_clear_image = clear_image.resize((df.FLAGS.input_image_height, df.FLAGS.input_image_width),
-                #                                          resample=im.BICUBIC)
-                # reshape_clear_image = tf.image.resize_image_with_crop_or_pad(clear_image,
-                #                                                              target_height=df.FLAGS.input_image_height,
-                #                                                              target_width=df.FLAGS.input_image_width)
                 shape = np.shape(clear_image)
                 # left, upper, right, lower
                 if df.FLAGS.input_image_width % 2 != 0:
@@ -506,7 +483,6 @@ def evaluate():
             # saver = tf.train.Saver()
             # Build the summary operation based on the TF collection of Summaries.
             summary_op = tf.summary.merge_all()
-            # summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
             eval_once(saver, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
 
         psnr_avg = cal_average(psnr_list)

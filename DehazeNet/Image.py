@@ -8,7 +8,7 @@ from __future__ import print_function
 
 import numpy as np
 import time
-
+from PIL import Image as im
 
 class Image(object):
     def __init__(self, path, key=None, image_tensor=None, image_index=None):
@@ -19,8 +19,8 @@ class Image(object):
 
 
 if __name__ == '__main__':
-    a = [1,2,3,4,5,6]
-    for i in range(20):
-        if i in a:
-            continue
-        print(i)
+    hazed_image = im.open("./test.jpg")
+    print(np.shape(hazed_image))
+    print(np.size(np.uint8(hazed_image)))
+    a = 2
+    print('1212   ' + str(a) + '   sdfsfd')

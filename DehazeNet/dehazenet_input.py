@@ -102,6 +102,8 @@ def bytes_feature(value):
 
 
 def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, width, tfrecord_path, test_image_list):
+    expect_size = df.FLAGS.input_image_height * df.FLAGS.input_image_width * dehazenet.RGB_CHANNEL
+    counter = 0
     test_clear_index_list = []
     for image in test_image_list:
         test_clear_index = image.image_index
@@ -144,6 +146,8 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
             down = up + df.FLAGS.input_image_height
             down1 = up1 + df.FLAGS.input_image_height
             reshape_hazed_image = hazed_image.crop((left, up, right, down))
+            if np.size(np.uint8(reshape_hazed_image)) != expect_size:
+                continue
             reshape_hazed_image1 = hazed_image.crop((left1, up1, right1, down1))
             reshape_hazed_image_arr = np.array(reshape_hazed_image)
             reshape_hazed_image_arr1 = np.array(reshape_hazed_image1)
@@ -152,6 +156,8 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
             #################Getting corresponding clear images#########################
             clear_image = find_corres_clear_image(image, dict)
             reshape_clear_image = clear_image.crop((left, up, right, down))
+            if np.size(np.uint8(reshape_clear_image)) != expect_size:
+                continue
             reshape_clear_image1 = clear_image.crop((left1, up1, right1, down1))
             reshape_clear_image_arr = np.array(reshape_clear_image)
             clear_image_raw = reshape_clear_image_arr.tostring()
@@ -165,11 +171,11 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
                 'clear_image_raw': bytes_feature(clear_image_raw1)}))
             writer.write(example.SerializeToString())
             writer.write(example1.SerializeToString())
-
+            counter += 1
         except IOError as e:
             raise RuntimeError('Could not read:', image.path)
     writer.close()
-    print('Transform done!')
+    print('Transform done! Totally transformed ' + str(counter * 2) + ' pairs of examples.' )
 
 
 def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width):
@@ -196,7 +202,7 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float16)
     else:
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float32)
-    min_fraction_of_examples_in_queue = 0.08
+    min_fraction_of_examples_in_queue = 0.05
     min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)
     return _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=False)
