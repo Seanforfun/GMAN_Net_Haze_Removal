@@ -20,6 +20,7 @@ from Image import *
 import dehazenet as dehazenet
 import dehazenet_flags as df
 # import dehazenet_darkchannel as dd
+import matplotlib.image as mpimg
 
 
 IMAGE_INDEX_BIT = 4
@@ -47,7 +48,7 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
         if os.path.isdir(os.path.join(dir, image_filename)):
             image_input(os.path.join(dir, image_filename), file_names, image_list, clear_dict, clear_image)
         elif image_filename.endswith(".png") \
-                | image_filename.endswith(".jpg") | image_filename.endswith(".bmp"):
+                | image_filename.endswith(".jpg") | image_filename.endswith(".bmp") | image_filename.endswith(".jpeg"):
             file_name = os.path.join(dir, image_filename)
             current_image = Image(path=file_name)
             current_image.key = id(current_image)
@@ -94,6 +95,7 @@ def find_corres_clear_image(image, clear_dict):
     if not tf.gfile.Exists(clear_image_obj.path):
         raise RuntimeError("Fail to load path from dictionary: " + clear_image_obj.path)
     clear_image = im.open(clear_image_obj.path)
+    clear_image = clear_image.convert('RGB')
     return clear_image
 
 
@@ -128,6 +130,7 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
             if image.image_index in test_clear_index_list:
                 continue
             hazed_image = im.open(image.path)
+            hazed_image = hazed_image.convert("RGB")
             shape = np.shape(hazed_image)
             if(0 >= shape[1] - df.FLAGS.input_image_width):
                 left = 0

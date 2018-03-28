@@ -27,7 +27,7 @@ tf.app.flags.DEFINE_string('tfrecord_path', './TFRecord/train.tfrecords',
                            """Path to save the TFRecord of the images""")
 tf.app.flags.DEFINE_boolean('tfrecord_rewrite', False,
                             """Whether to delete and rewrite the TFRecord.""")
-tf.app.flags.DEFINE_string('PerceNet_dir', './PerceNetModel',
+tf.app.flags.DEFINE_string('PerceNet_dir', './PerceNetModel/vgg16.npy',
                            """Path to save the PerceNet Model""")
 
 
@@ -74,3 +74,5 @@ tf.app.flags.DEFINE_integer('eval_interval_secs', 60 * 10,
                             """How often to run the eval.""")
 tf.app.flags.DEFINE_integer('num_examples', 1000000000,
                             """Number of test examples to run""")
+tf.app.flags.DEFINE_boolean('eval_only_haze', False,
+                            """Whether to load clear images.""")

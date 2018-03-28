@@ -22,6 +22,7 @@ from PIL import Image as im
 import math
 from Image import *
 import cv2
+import matplotlib.image as mpimg
 
 import re
 from datetime import datetime
@@ -267,7 +268,7 @@ def cal_psnr(im1, im2):
     return psnr
 
 
-def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list, ssim_list, heights, widths):
+def eval_once(saver, train_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list, ssim_list, heights, widths):
     with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
@@ -282,15 +283,16 @@ def eval_once(saver, train_op, summary_op, hazed_images, clear_images, hazed_ima
         prediction = sess.run([train_op], feed_dict={placeholder[index]: temp_image_list})
         # Run the session and get the prediction of one clear image
         dehazed_image = write_images_to_file(prediction, hazed_images_obj_list[index], heights[index], widths[index], sess)
-        clear_image = np.uint8(clear_images[index] * 255)
-        psnr_value = cal_psnr(dehazed_image, clear_image)
-        ssim_value = measure.compare_ssim(dehazed_image, clear_image, multichannel=True)
-        ssim_list.append(ssim_value)
-        psnr_list.append(psnr_value)
-        print('-------------------------------------------------------------------------------------------------------------------------------')
-        format_str = ('%s: image: %s PSNR: %f; SSIM: %f')
-        print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_value, ssim_value))
-        print('-------------------------------------------------------------------------------------------------------------------------------')
+        if clear_images is not None:
+            clear_image = np.uint8(clear_images[index] * 255)
+            psnr_value = cal_psnr(dehazed_image, clear_image)
+            ssim_value = measure.compare_ssim(dehazed_image, clear_image, multichannel=True)
+            ssim_list.append(ssim_value)
+            psnr_list.append(psnr_value)
+            print('-------------------------------------------------------------------------------------------------------------------------------')
+            format_str = ('%s: image: %s PSNR: %f; SSIM: %f')
+            print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_value, ssim_value))
+            print('-------------------------------------------------------------------------------------------------------------------------------')
 
 
 def evaluate_cartesian_product():
@@ -442,10 +444,11 @@ def evaluate():
         height_list = []
         width_list = []
         # Read all hazed images and clear images from directory and save into memory
-        di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _clear_test_img_list,
-                       _clear_test_directory, clear_image=True)
-        if len(_clear_test_img_list) == 0:
-            raise RuntimeError("No image found! Please supply clear images for training or eval ")
+        if not df.FLAGS.eval_only_haze:
+            di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _clear_test_img_list,
+                           _clear_test_directory, clear_image=True)
+            if len(_clear_test_img_list) == 0:
+                raise RuntimeError("No image found! Please supply clear images for training or eval ")
         # Hazed training image pre-process
         di.image_input(df.FLAGS.haze_test_images_dir, _hazed_test_file_names, _hazed_test_img_list,
                        clear_dict=None, clear_image=False)
@@ -453,7 +456,8 @@ def evaluate():
             raise RuntimeError("No image found! Please supply hazed images for training or eval ")
         for image in _hazed_test_img_list:
             # Read image from files and append them to the list
-            hazed_image = im.open(image.path)
+            # hazed_image = im.open(image.path)
+            hazed_image = mpimg.imread(image.path)
             shape = np.shape(hazed_image)
             height_list.append(shape[0])
             width_list.append(shape[1])
@@ -463,15 +467,17 @@ def evaluate():
             hazed_image_arr = np.array(hazed_image)
             float_hazed_image = hazed_image_arr.astype('float32') / 255
             hazed_image_list.append(float_hazed_image)
-            clear_image = di.find_corres_clear_image(image, _clear_test_directory)
-            clear_image_arr = np.array(clear_image)
-            float_clear_image = clear_image_arr.astype('float32') / 255
-            clear_image_list.append(float_clear_image)
+            if not df.FLAGS.eval_only_haze:
+                clear_image = di.find_corres_clear_image(image, _clear_test_directory)
+                clear_image_arr = np.array(clear_image)
+                float_clear_image = clear_image_arr.astype('float32') / 255
+                clear_image_list.append(float_clear_image)
 
-        if len(clear_image_list) != len(hazed_image_list):
-            raise RuntimeError("hazed images cannot correspond to clear images!")
+        if not df.FLAGS.eval_only_haze:
+            if len(clear_image_list) != len(hazed_image_list):
+                raise RuntimeError("hazed images cannot correspond to clear images!")
 
-        for index in range(len(clear_image_list)):
+        for index in range(len(hazed_image_list)):
             # logist = dmgt.inference(hazed_image)
             logist = lz_net_eval(hazed_image_placeholder_list[index], height_list[index], width_list[index])
             variable_averages = tf.train.ExponentialMovingAverage(
@@ -482,15 +488,20 @@ def evaluate():
             # logist = lz_net(hazed_image)
             # saver = tf.train.Saver()
             # Build the summary operation based on the TF collection of Summaries.
-            summary_op = tf.summary.merge_all()
-            eval_once(saver, logist, summary_op, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
+            # summary_op = tf.summary.merge_all()
+            if not df.FLAGS.eval_only_haze:
+                eval_once(saver, logist, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
+            else:
+                eval_once(saver, logist, hazed_image_list, None, _hazed_test_img_list, index,
+                          hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
 
-        psnr_avg = cal_average(psnr_list)
-        format_str = ('%s: Average PSNR: %5f')
-        print(format_str % (datetime.now(), psnr_avg))
-        ssim_avg = cal_average(ssim_list)
-        format_str = ('%s: Average SSIM: %5f')
-        print(format_str % (datetime.now(), ssim_avg))
+        if not df.FLAGS.eval_only_haze:
+            psnr_avg = cal_average(psnr_list)
+            format_str = ('%s: Average PSNR: %5f')
+            print(format_str % (datetime.now(), psnr_avg))
+            ssim_avg = cal_average(ssim_list)
+            format_str = ('%s: Average SSIM: %5f')
+            print(format_str % (datetime.now(), ssim_avg))
 
 
 def cal_average(list):
