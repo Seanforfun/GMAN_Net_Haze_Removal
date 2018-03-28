@@ -457,7 +457,8 @@ def evaluate():
         for image in _hazed_test_img_list:
             # Read image from files and append them to the list
             # hazed_image = im.open(image.path)
-            hazed_image = mpimg.imread(image.path)
+            hazed_image = im.open(image.path)
+            hazed_image = hazed_image.convert('RGB')
             shape = np.shape(hazed_image)
             height_list.append(shape[0])
             width_list.append(shape[1])
