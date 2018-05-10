@@ -175,16 +175,16 @@ def lz_training_net(hazed_batch):
     return x
 
 
-def loss(result_batch, clear_image_batch):
+def loss(vgg_per, result_batch, clear_image_batch):
     """
     :param result_batch: A batch of image that been processed by out CNN
     :param clear_image_batch: The ground truth image to compare with result_batch
     :return: The loss value will be added to tensorflow graph, return is actually not necessary
     but is left here to show respect to CIFAR-10 source code
     """
-    # vgg_per = Vgg16()
-    # output_per_1, output_per_2, output_per_3 = vgg_per.build(result_batch)
-    # output_tru_1, output_tru_2, output_tru_3 = vgg_per.build(clear_image_batch)
+
+    output_per_1, output_per_2, output_per_3 = vgg_per.build(result_batch)
+    output_tru_1, output_tru_2, output_tru_3 = vgg_per.build(clear_image_batch)
     # vgg_tru = Vgg16()
     # vgg_tru.build(clear_image_batch)
 
@@ -197,10 +197,10 @@ def loss(result_batch, clear_image_batch):
     # output_per_3 = vgg_per.conv2_2
     # output_tru_3 = vgg_tru.conv2_2
 
-    # per_loss = (tf.reduce_mean(tf.square(tf.subtract(output_per_1, output_tru_1))) / 3136) + \
-    #            (tf.reduce_mean(tf.square(tf.subtract(output_per_2, output_tru_2))) / 50176) + \
-    #            (tf.reduce_mean(tf.square(tf.subtract(output_per_3, output_tru_3))) / 12544)
-    loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch))) #+ 0.3 * per_loss
+    per_loss = (tf.reduce_mean(tf.square(tf.subtract(output_per_1, output_tru_1))) / 3136) + \
+               (tf.reduce_mean(tf.square(tf.subtract(output_per_2, output_tru_2))) / 50176) + \
+               (tf.reduce_mean(tf.square(tf.subtract(output_per_3, output_tru_3))) / 12544)
+    loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch))) + 0.01 * per_loss
     tf.add_to_collection('losses', loss)
 
     # The total loss is defined as the ms loss plus all of the weight
@@ -208,7 +208,7 @@ def loss(result_batch, clear_image_batch):
     return tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 
-def tower_loss(scope, hazed_batch, clear_batch):
+def tower_loss(vgg_per, scope, hazed_batch, clear_batch):
     """Calculate the total loss on a single tower running the DeHazeNet model.
 
       Args:
@@ -223,7 +223,7 @@ def tower_loss(scope, hazed_batch, clear_batch):
     # logist = inference(hazed_batch)
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
-    _ = loss(logist, clear_batch)
+    _ = loss(vgg_per,logist, clear_batch)
     # Assemble all of the losses for the current tower only.
     losses = tf.get_collection('losses', scope)
     # Calculate the total loss for the current tower.
@@ -323,6 +323,7 @@ def train():
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [hazed_image, clear_image], capacity=2 * df.FLAGS.num_gpus)
         # Calculate the gradients for each model tower.
+        vgg_per = Vgg16()
         tower_grads = []
         with tf.variable_scope(tf.get_variable_scope()):
             for i in range(df.FLAGS.num_gpus):
@@ -333,7 +334,7 @@ def train():
                         # Calculate the loss for one tower of the dehazenet model. This function
                         # constructs the entire dehazenet model but shares the variables across
                         # all towers.
-                        loss, _ = tower_loss(scope, hazed_image_batch, clear_image_batch)
+                        loss, _ = tower_loss(vgg_per, scope, hazed_image_batch, clear_image_batch)
 
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
