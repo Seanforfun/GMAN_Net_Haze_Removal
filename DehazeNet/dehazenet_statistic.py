@@ -18,13 +18,13 @@ hazy_dir = ""
 depth_dir = ""
 
 
-def sta_cal_psnr(im1, im2, area):
+def sta_cal_psnr(im1, im2, area, count):
     '''
         assert pixel value range is 0-255 and type is uint8
     '''
     # TODO Add psnr calculation according to pixel number
-    mse = ((im1.astype(np.float) - im2.astype(np.float)) ** 2).mean()
-    mse /= area
+    mse = ((im1.astype(np.float) - im2.astype(np.float)) ** 2).mean() * area
+    mse /= count
     psnr = 10 * np.log10(255 ** 2 / mse)
     return psnr
 
@@ -44,6 +44,7 @@ def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide, psnr_
     shape = np.shape(clear)
     H = shape[0]
     W = shape[1]
+    area = H * W
     depth_matting = np.zeros((H, W))
     count = 0
     for h in range(H):
@@ -58,7 +59,7 @@ def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide, psnr_
         temp_clear[:, :, i] = np.multiply(clear[:, :, i], depth_matting)
         temp_result[:, :, i] = np.multiply(result[:, :, i], depth_matting)
 
-    psnr = sta_cal_psnr(temp_clear, temp_result, count)
+    psnr = sta_cal_psnr(temp_clear, temp_result, area, count)
     psnr_map_lock.acquire()
     psnr_map[group_id] = psnr
     psnr_map_lock.lease()
