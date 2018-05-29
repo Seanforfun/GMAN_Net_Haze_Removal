@@ -82,7 +82,7 @@ def Recover(im, t, A, tx=0.1):
 if __name__ == '__main__':
     import sys
 
-    src = cv2.imread('./0001_0.8_0.2.jpg');
+    src = cv2.imread('./man._1526250316.294447_pred.jpg');
 
     I = src.astype('float64') / 255;
 
@@ -92,8 +92,8 @@ if __name__ == '__main__':
     t = TransmissionRefine(src, te);
     J = Recover(I, t, A, 0.1);
     print(t.shape)
-    cv2.imwrite('./image/transmit.png', t * 255)
-    cv2.imwrite("./image/J.png", J * 255)
+    cv2.imwrite('./Transmmision.jpg', t * 255)
+    cv2.imwrite("./result.jpg", J * 255)
 
     # cv2.imshow("dark", dark);
     # cv2.imshow("t", t);

@@ -84,12 +84,6 @@ def lz_net_eval(hazed_batch, height, width):
     x_s = dt.conv_eval('DN_conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_eval('DN_conv1_2', x_s, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
-    # with tf.name_scope('pool1'):
-    #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
-    #
-    # with tf.name_scope('pool2'):
-    #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
-
     x = dt.conv_eval('upsampling_1', x, 64, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
     x = dt.conv_eval('upsampling_2', x, 128, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
 
@@ -134,101 +128,15 @@ def lz_net_eval(hazed_batch, height, width):
 
     x = dt.deconv_eval('DN_deconv1', x, 64, 64, output_shape=[1, int((height + 1)/2), int((width + 1)/2), 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
 
-    # x5 = tools.conv('DN_conv6_1', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.conv('DN_conv6_2', x5, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.conv_nonacti('DN_conv6_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tf.add(x, x5)
-    # # x = tools.batch_norm(x)
-    # x = tools.acti_layer(x)
-
     x = dt.deconv_eval('DN_deconv2', x, 64, 64, output_shape=[1, height, width, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
     x = dt.conv_eval('DN_conv6_6', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_nonacti_eval('DN_conv6_7', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x6 = tools.conv('DN_conv6_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.conv('DN_conv6_5', x6, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.conv_nonacti('DN_conv6_6', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
+
     x = tf.add(x, x_s)
-    # # x = tools.batch_norm(x)
     x = dt.acti_layer(x)
 
     x = dt.conv_eval('DN_conv6_8', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-
-    # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.FC_layer('fc6', x, out_nodes=4096)
-    # with tf.name_scope('batch_norm1'):
-
-    #     x = tools.batch_norm(x)
-    # x = tools.FC_layer('fc7', x, out_nod
-    #
-    # es=4096)
-    # with tf.name_scope('batch_norm2'):
-    #     x = tools.batch_norm(x)
-    # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
     return x
-
-
-# TODO Zheng Liu's Place for evaluating his network
-def _lz_net_eval(hazed_batch, height, width):
-    with tf.name_scope('DehazeNet'):
-        x = dt.conv_eval('conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-
-        # with tf.name_scope('pool1'):
-        #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
-        #
-        # with tf.name_scope('pool2'):
-        #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
-
-        x = dt.conv_eval('upsampling_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
-        x = dt.conv_eval('upsampling_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
-
-        x1 = dt.conv_eval('conv1_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-
-        x = dt.conv_eval('conv2_1', x1, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_nonacti_eval('conv2_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = tf.add(x, x1)
-        x = dt.acti_layer(x)
-        x2 = dt.conv_eval('conv3_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_eval('conv3_2', x2, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_nonacti_eval('conv3_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = tf.add(x, x2)
-        x = dt.acti_layer(x)
-
-        # x = tools.deconv('deconv3', x, 64, kernel_size=[3, 3], stride=[1, 2, 2, 1])
-        x3 = dt.conv_eval('conv4_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_nonacti_eval('conv4_2', x3, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = tf.add(x, x3)
-        x = dt.acti_layer(x)
-        x = dt.conv_eval('conv4_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-
-        x4 = dt.conv_eval('conv5_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_eval('conv5_2', x4, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = dt.conv_nonacti_eval('conv5_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        x = tf.add(x, x4)
-        x = dt.acti_layer(x)
-
-        x = dt.deconv_eval('deconv1', x, 64, 64, output_shape=[1, int((height + 1)/2), int((width + 1)/2), 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
-
-        x = dt.deconv_eval('deconv2', x, 64, 64, output_shape=[1, height, width, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
-
-        x = dt.conv_eval('conv6_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-
-        x = dt.conv_eval('conv6_2', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        # x = tf.saturate_cast(x, tf.float32)
-        # x = tf.image.adjust_brightness(x, 0.05)
-        # x = tf.layers.conv2d(x, output_channels, 3, padding='same')
-        # x = tools.conv('conv6_3', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        # x = tools.FC_layer('fc6', x, out_nodes=4096)
-        # with tf.name_scope('batch_norm1'):
-
-        #     x = tools.batch_norm(x)
-        # x = tools.FC_layer('fc7', x, out_nodes=4096)
-        # with tf.name_scope('batch_norm2'):
-        #     x = tools.batch_norm(x)
-        # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
-
-        return x
-
 
 def _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuffle=True):
     num_preprocess_threads = 8
@@ -269,7 +177,9 @@ def cal_psnr(im1, im2):
 
 
 def eval_once(saver, train_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list, ssim_list, heights, widths):
-    with tf.Session() as sess:
+    with  tf.Session(config=tf.ConfigProto(
+            allow_soft_placement=True,
+            log_device_placement=df.FLAGS.log_device_placement)) as sess:
         ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
             # Restores from checkpoint
@@ -454,6 +364,7 @@ def evaluate():
                        clear_dict=None, clear_image=False)
         if len(_hazed_test_img_list) == 0:
             raise RuntimeError("No image found! Please supply hazed images for training or eval ")
+
         for image in _hazed_test_img_list:
             # Read image from files and append them to the list
             # hazed_image = im.open(image.path)
@@ -474,10 +385,13 @@ def evaluate():
                 float_clear_image = clear_image_arr.astype('float32') / 255
                 clear_image_list.append(float_clear_image)
 
+
         if not df.FLAGS.eval_only_haze:
             if len(clear_image_list) != len(hazed_image_list):
                 raise RuntimeError("hazed images cannot correspond to clear images!")
-
+        print("==================================================================")
+        print(len(hazed_image_list))
+        print("==================================================================")
         for index in range(len(hazed_image_list)):
             # logist = dmgt.inference(hazed_image)
             logist = lz_net_eval(hazed_image_placeholder_list[index], height_list[index], width_list[index])
@@ -485,11 +399,6 @@ def evaluate():
                 dn.MOVING_AVERAGE_DECAY)
             variables_to_restore = variable_averages.variables_to_restore()
             saver = tf.train.Saver(variables_to_restore)
-            # TODO Zheng Liu please remove the comments of next two lines and add comment to upper five lines
-            # logist = lz_net(hazed_image)
-            # saver = tf.train.Saver()
-            # Build the summary operation based on the TF collection of Summaries.
-            # summary_op = tf.summary.merge_all()
             if not df.FLAGS.eval_only_haze:
                 eval_once(saver, logist, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
             else:
