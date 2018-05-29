@@ -18,11 +18,13 @@ hazy_dir = ""
 depth_dir = ""
 
 
-def sta_cal_psnr(im1, im2):
+def sta_cal_psnr(im1, im2, area):
     '''
         assert pixel value range is 0-255 and type is uint8
     '''
+    # TODO Add psnr calculation according to pixel number
     mse = ((im1.astype(np.float) - im2.astype(np.float)) ** 2).mean()
+    mse /= area
     psnr = 10 * np.log10(255 ** 2 / mse)
     return psnr
 
@@ -47,15 +49,16 @@ def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide, psnr_
     for h in range(H):
         for w in range(W):
             single_pixel = depth[h][w]
-            if(single_pixel >= low_boundary and single_pixel < up_boundary ):    # If depth is in the range
+            if low_boundary <= single_pixel < up_boundary :    # If depth is in the range
                 count += 1
                 depth_matting[h][w] = 1
-
+    temp_clear = np.zeros((H, W, 3))
+    temp_result = np.zeros((H, W, 3))
     for i in range(CHANNEL_NUM):
-        clear[:, :, i] = np.multiply(clear[:, :, i], depth_matting)
-        result[:, :, i] = np.multiply(result[:, :, i], depth_matting)
+        temp_clear[:, :, i] = np.multiply(clear[:, :, i], depth_matting)
+        temp_result[:, :, i] = np.multiply(result[:, :, i], depth_matting)
 
-    psnr = sta_cal_psnr(clear, result)
+    psnr = sta_cal_psnr(temp_clear, temp_result, count)
     psnr_map_lock.acquire()
     psnr_map[group_id] = psnr
     psnr_map_lock.lease()
@@ -94,7 +97,7 @@ def sta_do_statistic(divide, thread_pool):
     map(thread_pool.putRequest, task_list)
     thread_pool.poll()
 
-    pass
+    # Write the result into specific file.
 
 
 def main():
