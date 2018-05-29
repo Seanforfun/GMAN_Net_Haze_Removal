@@ -7,6 +7,7 @@ from PIL import Image as Image
 import threadpool
 import numpy as np
 import os
+import threading
 
 
 GROUP_NUM = 10
@@ -17,6 +18,15 @@ hazy_dir = ""
 depth_dir = ""
 
 
+def sta_cal_psnr(im1, im2):
+    '''
+        assert pixel value range is 0-255 and type is uint8
+    '''
+    mse = ((im1.astype(np.float) - im2.astype(np.float)) ** 2).mean()
+    psnr = 10 * np.log10(255 ** 2 / mse)
+    return psnr
+
+
 # TODO lz
 def sta_image_input(clear_dir, result_dir, depth_dir):
     clear_file_list = os.listdir(clear_dir)
@@ -25,7 +35,8 @@ def sta_image_input(clear_dir, result_dir, depth_dir):
 
     return clear_file_list, result_file_list, depth_file_list
 
-def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide):
+
+def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide, psnr_map_lock):
     low_boundary = group_id * divide
     up_boundary = low_boundary + divide
     shape = np.shape(clear)
@@ -43,6 +54,11 @@ def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide):
     for i in range(CHANNEL_NUM):
         clear[:, :, i] = np.multiply(clear[:, :, i], depth_matting)
         result[:, :, i] = np.multiply(result[:, :, i], depth_matting)
+
+    psnr = sta_cal_psnr(clear, result)
+    psnr_map_lock.acquire()
+    psnr_map[group_id] = psnr
+    psnr_map_lock.lease()
 
 
 def sta_read_image(clear_image_dir, result_image_dir, depth_map_dir):
@@ -68,12 +84,16 @@ def sta_do_statistic(divide, thread_pool):
 
     #  Traversal every pixel on the image and get a map for each group of the image.
     #  image in the same group = old image .* map
+    # Calculate PSNR for all of the group respectively and record them into psnr_map.
     task_list = []  # Create a list to save all tasks
-    psnr_map = {}  # Map to write PSNR result.
+    psnr_map = {}  # Map to write PSNR result. Mutual information, need to add a lock.
+    write_lock = threading.Lock()
     for i in range(GROUP_NUM):
-        task_list.append(threadpool.makeRequests(sta_cal_single_image, [clear, result, depth, psnr_map, i, divide]))
+        task_list.append(threadpool.makeRequests(sta_cal_single_image, [clear, result, depth, psnr_map, i, divide,
+                                                                        write_lock]))
+    map(thread_pool.putRequest, task_list)
+    thread_pool.poll()
 
-    # Calculate PSNR for all of the group respectively and record them into a new file.
     pass
 
 
