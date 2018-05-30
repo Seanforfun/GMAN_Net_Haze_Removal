@@ -17,6 +17,8 @@ clear_dir = ""
 hazy_dir = ""
 depth_dir = ""
 
+DICT_WRITE_LOCK = threading.Lock()
+
 
 def sta_cal_psnr(im1, im2, area, count):
     '''
@@ -38,7 +40,7 @@ def sta_image_input(clear_dir, result_dir, depth_dir):
     return clear_file_list, result_file_list, depth_file_list
 
 
-def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide, psnr_map_lock):
+def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide):
     low_boundary = group_id * divide
     up_boundary = low_boundary + divide
     shape = np.shape(clear)
@@ -60,9 +62,9 @@ def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide, psnr_
         temp_result[:, :, i] = np.multiply(result[:, :, i], depth_matting)
 
     psnr = sta_cal_psnr(temp_clear, temp_result, area, count)
-    psnr_map_lock.acquire()
+    DICT_WRITE_LOCK.acquire()
     psnr_map[group_id] = psnr
-    psnr_map_lock.lease()
+    DICT_WRITE_LOCK.lease()
 
 
 def sta_read_image(clear_image_dir, result_image_dir, depth_map_dir):
@@ -91,11 +93,12 @@ def sta_do_statistic(divide, thread_pool):
     # Calculate PSNR for all of the group respectively and record them into psnr_map.
     task_list = []  # Create a list to save all tasks
     psnr_map = {}  # Map to write PSNR result. Mutual information, need to add a lock.
-    write_lock = threading.Lock()
     for i in range(GROUP_NUM):
-        task_list.append(threadpool.makeRequests(sta_cal_single_image, [None, ('clear':clear, 'result':result, 'depth':depth, 'psnr_map':psnr_map, 'group_id':i, 'divide':divide,
-                                                                        'psnr_map_lock':write_lock)]))
-    map(thread_pool.putRequest, task_list)
+        lst_vars = [clear, result, depth, psnr_map, i, divide]
+        func_var = [(lst_vars, None)]
+        task_list.append(threadpool.makeRequests(sta_cal_single_image, func_var))
+    for requests in task_list:
+        [thread_pool.putRequest(req) for req in requests]
     thread_pool.poll()
 
     # Write the result into specific file.
