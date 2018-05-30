@@ -93,8 +93,8 @@ def sta_do_statistic(divide, thread_pool):
     psnr_map = {}  # Map to write PSNR result. Mutual information, need to add a lock.
     write_lock = threading.Lock()
     for i in range(GROUP_NUM):
-        task_list.append(threadpool.makeRequests(sta_cal_single_image, [clear, result, depth, psnr_map, i, divide,
-                                                                        write_lock]))
+        task_list.append(threadpool.makeRequests(sta_cal_single_image, [None, ('clear':clear, 'result':result, 'depth':depth, 'psnr_map':psnr_map, 'group_id':i, 'divide':divide,
+                                                                        'psnr_map_lock':write_lock)]))
     map(thread_pool.putRequest, task_list)
     thread_pool.poll()
 
