@@ -8,6 +8,7 @@ import threadpool
 import numpy as np
 import os
 import threading
+from queue import PriorityQueue
 
 
 GROUP_NUM = 10
@@ -15,12 +16,24 @@ CHANNEL_NUM = 3
 COMMON_INDEX_BIT = 8
 CLEAR_DICTIONARY = {}
 DEPTH_DICTIONARY = {}
+q = PriorityQueue() # Priority queue used to save pixel psnr information in increasing order, need lock
+
 # TODO Need to assign a directory
 clear_dir = ""
 result_dir = ""
 depth_dir = ""
 
-DICT_WRITE_LOCK = threading.Lock()
+q_lock = threading.Lock()
+
+
+class PixelResult(object):
+    def __init__(self, depth, psnr):
+        self.depth = depth
+        self.psnr = psnr
+
+    def __cmp__(self, other):
+        # Override __cmp__ for taking advantage of priority queue
+        return self.depth - other.depth
 
 
 def sta_cal_psnr(im1, im2, area, count):
@@ -33,6 +46,10 @@ def sta_cal_psnr(im1, im2, area, count):
     psnr = 10 * np.log10(255 ** 2 / mse)
     return psnr
 
+def sta_cal_psnr_pixel(pixel1, pixel2):
+    psnr = 0
+    # Calculate psnr for a pixel
+    return psnr
 
 # Read clear and depth images from dictionary and create two dictionary for the files for referencing
 def sta_image_input(clear_dir, depth_dir):
@@ -53,8 +70,8 @@ def sta_image_input(clear_dir, depth_dir):
     return
 
 
-# TODO Use priority queue to replace the map
-def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide):
+# Process single image using by depth area.
+def sta_cal_single_image_by_area(clear, result, depth, psnr_map, group_id, divide):
     low_boundary = group_id * divide
     up_boundary = low_boundary + divide
     shape = np.shape(clear)
@@ -76,9 +93,27 @@ def sta_cal_single_image(clear, result, depth, psnr_map, group_id, divide):
         temp_result[:, :, i] = np.multiply(result[:, :, i], depth_matting)
 
     psnr = sta_cal_psnr(temp_clear, temp_result, area, count)
-    DICT_WRITE_LOCK.acquire()
+    q_lock.acquire()
     psnr_map[group_id] = psnr
-    DICT_WRITE_LOCK.lease()
+    q_lock.lease()
+
+
+def sta_cal_single_image_by_pixel(clear, result, depth, q, group_id, divide):
+    low_boundary = group_id * divide
+    up_boundary = low_boundary + divide
+    shape = np.shape(clear)
+    H = shape[0]
+    W = shape[1]
+    for h in range(H):
+        for w in range(W):
+            pixel_depth = depth[h][w]
+            if low_boundary <= pixel_depth < up_boundary:
+                # Calculate psnr for single pixel and save into priority queue
+                pixel_psnr = sta_cal_psnr_pixel(clear[h, w, :], result[h, w, :])
+                pixel_result = PixelResult(pixel_depth, pixel_psnr)
+                q_lock.acquire()
+                q.put(pixel_result)
+                q_lock.lease()
 
 
 def sta_read_image(clear_image_dir, result_image_dir, depth_map_dir):
@@ -112,7 +147,7 @@ def sta_do_statistic(divide, thread_pool):
         for i in range(GROUP_NUM):
             lst_vars = [clear, result, depth, psnr_map, i, divide]
             func_var = [(lst_vars, None)]
-            task_list.append(threadpool.makeRequests(sta_cal_single_image, func_var))
+            task_list.append(threadpool.makeRequests(sta_cal_single_image_by_area, func_var))
         for requests in task_list:
             [thread_pool.putRequest(req) for req in requests]
         thread_pool.poll()
@@ -129,7 +164,6 @@ def main():
     sta_image_input(clear_dir, depth_dir)
     #  Start doing statistic calculation
     sta_do_statistic(divide, pool)
-    pass
 
 
 if __name__ == '__main__':
