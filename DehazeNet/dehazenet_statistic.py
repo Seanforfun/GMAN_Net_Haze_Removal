@@ -1,7 +1,7 @@
 #  ====================================================
 #   Filename: dehazenet_statistic.py
 #   Function: This file used to evaluate the performance of  PSNR
-#  according to depth of each pixel.
+#  according to transmission of each pixel.
 #  ====================================================
 from PIL import Image as Image
 import threadpool
@@ -19,6 +19,7 @@ NEED_SERIALIZATION = True
 CLEAR_DICTIONARY = {}
 TRANSMISSION_DICTIONARY = {}
 SERIALIZATION_FILE_NAME = './PQ.pkl'
+START_CALCULATION = True
 q = PriorityQueue() # Priority queue used to save pixel psnr information in increasing order, need lock
 
 # TODO Need to assign a directory
@@ -48,6 +49,7 @@ def sta_cal_psnr(im1, im2, area, count):
     mse /= count
     psnr = 10 * np.log10(255 ** 2 / mse)
     return psnr
+
 
 def sta_cal_psnr_pixel(pixel1, pixel2):
     psnr = 0
@@ -164,18 +166,29 @@ def sta_do_statistic(divide, thread_pool):
 def main():
     # Group order: 0, 1, 2 ... GROUP_NUM-1
     divide = 1 / GROUP_NUM
-    # Create a thread pool, # of thread = GROUP_NUM * 2.
-    pool = threadpool.ThreadPool(GROUP_NUM * 2)
-    # call dehazenet_input to read the images directory.
-    sta_image_input(clear_dir, transmission_dir)
-    #  Start doing statistic calculation
-    sta_do_statistic(divide, pool)
-    # Serialization the priority queue to SERIALIZATION_FILE_NAME
-    if NEED_SERIALIZATION:
-        if os.path.exists(SERIALIZATION_FILE_NAME):
-            os.remove(SERIALIZATION_FILE_NAME)
-        f = open(SERIALIZATION_FILE_NAME, 'rw')
-        pickle.dump(q, f)
+    if START_CALCULATION:
+        # Create a thread pool, # of thread = GROUP_NUM * 2.
+        pool = threadpool.ThreadPool(GROUP_NUM * 2)
+        # call dehazenet_input to read the images directory.
+        sta_image_input(clear_dir, transmission_dir)
+        #  Start doing statistic calculation
+        sta_do_statistic(divide, pool)
+        # Serialization the priority queue to SERIALIZATION_FILE_NAME
+        if NEED_SERIALIZATION:
+            if os.path.exists(SERIALIZATION_FILE_NAME):
+                os.remove(SERIALIZATION_FILE_NAME)
+            with open(SERIALIZATION_FILE_NAME, 'wb') as f:
+                pickle.dump(q, f)   # Dump the queue into file
+            # TODO dequeue the pq and create the graph
+            
+    else:
+        # Load the queue from file
+        if not os.path.exists(SERIALIZATION_FILE_NAME):
+            return
+        else:
+            with open(SERIALIZATION_FILE_NAME, 'rb') as f:
+                pq = pickle.load(f) # load priority queue from file
+                # TODO dequeue the pq and create the graph
 
 
 if __name__ == '__main__':
