@@ -10,6 +10,7 @@ import os
 import threading
 from queue import PriorityQueue
 import pickle
+import math
 
 
 GROUP_NUM = 10
@@ -20,6 +21,7 @@ CLEAR_DICTIONARY = {}
 TRANSMISSION_DICTIONARY = {}
 SERIALIZATION_FILE_NAME = './PQ.pkl'
 START_CALCULATION = True
+FINAL_RESULT_MAP = {}   # key is the lowest transmission in current group, value is average mse.
 q = PriorityQueue() # Priority queue used to save pixel psnr information in increasing order, need lock
 
 # TODO Need to assign a directory
@@ -77,7 +79,6 @@ def sta_image_input(clear_dir, transmission_dir):
         file_path = os.path.join(transmission_dir, transmission_image_name)
         transmission_index = transmission_image_name[0:COMMON_INDEX_BIT]
         TRANSMISSION_DICTIONARY[transmission_index] = file_path
-    return
 
 
 # Process single image using by transmission area.
@@ -163,32 +164,74 @@ def sta_do_statistic(divide, thread_pool):
         thread_pool.poll()
 
 
+def sta_group_count_average(low, group_length, result_list):
+    up = low + group_length
+    total_mse = 0.0
+    t = result_list[low].transmission
+    while low < up:
+        single_pixel_result = result_list[low]
+        total_mse += single_pixel_result.mse
+        low += 1
+    q_lock.acquire()
+    FINAL_RESULT_MAP[t] = total_mse/group_length
+    q_lock.lease()
+
+
+def sta_create_visual_result(result_list, pool):
+    # result_list is a list used to save the PixelResults, which is sorted at the previous step.
+    result_len = len(result_list)
+    '''
+        How are lists implemented?
+    Python¡¯s lists are really variable-length arrays, not Lisp-style linked lists. The implementation uses a contiguous array of references to other objects, and keeps a pointer to this array and the array¡¯s length in a list head structure.
+    This makes indexing a list a[i] an operation whose cost is independent of the size of the list or the value of the index.
+    When items are appended or inserted, the array of references is resized. Some cleverness is applied to improve the performance of appending items repeatedly; when the array must be grown, some extra space is allocated so the next few times don¡¯t require an actual resize.
+    '''
+    # Internally is an array saving pointer, like arrayList in Java.
+    # Calculate upper and lower index boundary for each group in list.
+    group_length = math.floor(result_len / GROUP_NUM)
+    task_list = []
+    for i in range(GROUP_NUM):
+        low = group_length * i
+        lst_vars = [low, group_length, result_list]
+        func_var = [(lst_vars, None)]
+        task_list.append(threadpool.makeRequests(sta_group_count_average, func_var))
+    for requests in task_list:
+        [pool.putRequest(req) for req in requests]
+    pool.poll()
+
+
 def main():
     # Group order: 0, 1, 2 ... GROUP_NUM-1
     divide = 1 / GROUP_NUM
+    sorted_pickle_list = []
+    # Create a thread pool, # of thread = GROUP_NUM * 2.
+    pool = threadpool.ThreadPool(GROUP_NUM * 2)
     if START_CALCULATION:
-        # Create a thread pool, # of thread = GROUP_NUM * 2.
-        pool = threadpool.ThreadPool(GROUP_NUM * 2)
         # call dehazenet_input to read the images directory.
         sta_image_input(clear_dir, transmission_dir)
         #  Start doing statistic calculation
         sta_do_statistic(divide, pool)
+        while not q.empty():
+            sorted_pickle_list.append(q.get())
+        del q
         # Serialization the priority queue to SERIALIZATION_FILE_NAME
         if NEED_SERIALIZATION:
             if os.path.exists(SERIALIZATION_FILE_NAME):
                 os.remove(SERIALIZATION_FILE_NAME)
             with open(SERIALIZATION_FILE_NAME, 'wb') as f:
-                pickle.dump(q, f)   # Dump the queue into file
-            # TODO dequeue the pq and create the graph
-            
+                pickle.dump(sorted_pickle_list, f)   # Dump the queue into file
+
     else:
         # Load the queue from file
         if not os.path.exists(SERIALIZATION_FILE_NAME):
-            return
+            raise RuntimeError("Serialization file does not exist!")
         else:
             with open(SERIALIZATION_FILE_NAME, 'rb') as f:
-                pq = pickle.load(f) # load priority queue from file
-                # TODO dequeue the pq and create the graph
+                sorted_pickle_list = pickle.load(f) # load priority queue from file
+
+    # Use the data from calculation or serialization file to create the statistical result
+    sta_create_visual_result(sorted_pickle_list, pool)
+    print(FINAL_RESULT_MAP)
 
 
 if __name__ == '__main__':
