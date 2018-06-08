@@ -8,26 +8,27 @@ import threadpool
 import numpy as np
 import os
 import threading
-from queue import PriorityQueue
+import queue
 import pickle
 import math
 
 
 GROUP_NUM = 10
 CHANNEL_NUM = 3
-COMMON_INDEX_BIT = 8
+CLEAR_INDEX_BIT = 4
+TRANS_INDEX_BIT = 4
 NEED_SERIALIZATION = True
 CLEAR_DICTIONARY = {}
 TRANSMISSION_DICTIONARY = {}
 SERIALIZATION_FILE_NAME = './PQ.pkl'
 START_CALCULATION = True
 FINAL_RESULT_MAP = {}   # key is the lowest transmission in current group, value is average mse.
-q = PriorityQueue() # Priority queue used to save pixel psnr information in increasing order, need lock
+# q = PriorityQueue()  # Priority queue used to save pixel psnr information in increasing order, need lock
 
 # TODO Need to assign a directory
-clear_dir = ""
-result_dir = ""
-transmission_dir = ""
+CLEAR_DIR = "./ClearImages/TestImages"
+RESULT_DIR = "./ClearResultImages"
+TRANSMISSION_DIR = "./ClearImages/TransImages"
 
 q_lock = threading.Lock()
 
@@ -37,9 +38,8 @@ class PixelResult(object):
         self.transmission = transmission
         self.mse = mse
 
-    def __cmp__(self, other):
-        # Override __cmp__ for taking advantage of priority queue
-        return self.transmission - other.transmission
+    def __lt__(self, other):
+        return self.transmission < other.transmission
 
 
 def sta_cal_psnr(im1, im2, area, count):
@@ -61,6 +61,7 @@ def sta_cal_psnr_pixel(pixel1, pixel2):
 
 def sta_cal_mse_pixel(pixel1, pixel2):
     return ((pixel1.astype(np.float) - pixel2.astype(np.float)) ** 2).mean()
+    # return pixel1.astype(np.float) - pixel2.astype(np.float)
 
 
 # Read clear and transmission images from dictionary and create two dictionary for the files for referencing
@@ -71,13 +72,13 @@ def sta_image_input(clear_dir, transmission_dir):
     # Construct a dictionary for clear images
     for clear_image_name in clear_file_list:
         file_path = os.path.join(clear_dir, clear_image_name)
-        clear_index = clear_image_name[0:COMMON_INDEX_BIT]
+        clear_index = clear_image_name[0:CLEAR_INDEX_BIT]
         CLEAR_DICTIONARY[clear_index] = file_path
 
     # Construct a dictionary for transmission_images
     for transmission_image_name in transmission_file_list:
         file_path = os.path.join(transmission_dir, transmission_image_name)
-        transmission_index = transmission_image_name[0:COMMON_INDEX_BIT]
+        transmission_index = transmission_image_name[0:TRANS_INDEX_BIT]
         TRANSMISSION_DICTIONARY[transmission_index] = file_path
 
 
@@ -106,7 +107,7 @@ def sta_cal_single_image_by_area(clear, result, transmission, psnr_map, group_id
     psnr = sta_cal_psnr(temp_clear, temp_result, area, count)
     q_lock.acquire()
     psnr_map[group_id] = psnr
-    q_lock.lease()
+    q_lock.release()
 
 
 def sta_cal_single_image_by_pixel(clear, result, transmission, q, group_id, divide):
@@ -124,7 +125,7 @@ def sta_cal_single_image_by_pixel(clear, result, transmission, q, group_id, divi
                 pixel_result = PixelResult(pixel_transmission, pixel_mse)
                 q_lock.acquire()
                 q.put(pixel_result)
-                q_lock.lease()
+                q_lock.release()
 
 
 def sta_read_image(clear_image_dir, result_image_dir, transmission_map_dir):
@@ -140,15 +141,20 @@ def sta_read_image(clear_image_dir, result_image_dir, transmission_map_dir):
     return clear, result, transmission
 
 
-def sta_do_statistic(divide, thread_pool):
-    result_file_list = os.listdir(result_dir)
+def sta_do_statistic(divide, thread_pool, q):
+    result_file_list = os.listdir(RESULT_DIR)
     # Read clear image, result image and their corresponding transmission image.
     # Get the three corresponding matrices for a single image.
     for result_image_name in result_file_list:
-        result_single_dir = os.path.join(result_dir, result_image_name)
-        index = result_image_name[0:COMMON_INDEX_BIT]
-        clear_single_dir = CLEAR_DICTIONARY[index]
-        transmission_single_dir = TRANSMISSION_DICTIONARY[index]
+        result_single_dir = os.path.join(RESULT_DIR, result_image_name)
+        clear_index = result_image_name[0:CLEAR_INDEX_BIT]
+        trans_index = result_image_name[0:TRANS_INDEX_BIT]
+        if clear_index not in CLEAR_DICTIONARY:
+            raise RuntimeError(result_image_name + ' cannot find corresponding clear image.')
+        clear_single_dir = CLEAR_DICTIONARY[clear_index]
+        if trans_index not in TRANSMISSION_DICTIONARY:
+            raise RuntimeError(result_image_name + ' cannot find corresponding transmission image.')
+        transmission_single_dir = TRANSMISSION_DICTIONARY[trans_index]
         clear, result, transmission = sta_read_image(clear_single_dir, result_single_dir, transmission_single_dir)
         #  Traversal every pixel on the image and get a map for each group of the image.
         #  image in the same group = old image .* map
@@ -161,7 +167,7 @@ def sta_do_statistic(divide, thread_pool):
             task_list.append(threadpool.makeRequests(sta_cal_single_image_by_pixel, func_var))
         for requests in task_list:
             [thread_pool.putRequest(req) for req in requests]
-        thread_pool.poll()
+        thread_pool.wait()
 
 
 def sta_group_count_average(low, group_length, result_list):
@@ -174,7 +180,7 @@ def sta_group_count_average(low, group_length, result_list):
         low += 1
     q_lock.acquire()
     FINAL_RESULT_MAP[t] = total_mse/group_length
-    q_lock.lease()
+    q_lock.release()
 
 
 def sta_create_visual_result(result_list, pool):
@@ -182,9 +188,9 @@ def sta_create_visual_result(result_list, pool):
     result_len = len(result_list)
     '''
         How are lists implemented?
-    Python¡¯s lists are really variable-length arrays, not Lisp-style linked lists. The implementation uses a contiguous array of references to other objects, and keeps a pointer to this array and the array¡¯s length in a list head structure.
+    Python’s lists are really variable-length arrays, not Lisp-style linked lists. The implementation uses a contiguous array of references to other objects, and keeps a pointer to this array and the array’s length in a list head structure.
     This makes indexing a list a[i] an operation whose cost is independent of the size of the list or the value of the index.
-    When items are appended or inserted, the array of references is resized. Some cleverness is applied to improve the performance of appending items repeatedly; when the array must be grown, some extra space is allocated so the next few times don¡¯t require an actual resize.
+    When items are appended or inserted, the array of references is resized. Some cleverness is applied to improve the performance of appending items repeatedly; when the array must be grown, some extra space is allocated so the next few times don’t require an actual resize.
     '''
     # Internally is an array saving pointer, like arrayList in Java.
     # Calculate upper and lower index boundary for each group in list.
@@ -197,20 +203,21 @@ def sta_create_visual_result(result_list, pool):
         task_list.append(threadpool.makeRequests(sta_group_count_average, func_var))
     for requests in task_list:
         [pool.putRequest(req) for req in requests]
-    pool.poll()
+    pool.wait()
 
 
 def main():
     # Group order: 0, 1, 2 ... GROUP_NUM-1
-    divide = 1 / GROUP_NUM
+    divide = (1 / GROUP_NUM) * 255
     sorted_pickle_list = []
     # Create a thread pool, # of thread = GROUP_NUM * 2.
     pool = threadpool.ThreadPool(GROUP_NUM * 2)
     if START_CALCULATION:
         # call dehazenet_input to read the images directory.
-        sta_image_input(clear_dir, transmission_dir)
+        sta_image_input(CLEAR_DIR, TRANSMISSION_DIR)
+        q = queue.PriorityQueue()
         #  Start doing statistic calculation
-        sta_do_statistic(divide, pool)
+        sta_do_statistic(divide, pool, q)
         while not q.empty():
             sorted_pickle_list.append(q.get())
         del q
