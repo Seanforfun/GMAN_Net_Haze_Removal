@@ -25,7 +25,6 @@ START_CALCULATION = True
 FINAL_RESULT_MAP = {}   # key is the lowest transmission in current group, value is average mse.
 # q = PriorityQueue()  # Priority queue used to save pixel psnr information in increasing order, need lock
 
-# TODO Need to assign a directory
 CLEAR_DIR = "./ClearImages/TestImages"
 RESULT_DIR = "./ClearResultImages"
 TRANSMISSION_DIR = "./ClearImages/TransImages"
@@ -46,7 +45,6 @@ def sta_cal_psnr(im1, im2, area, count):
     '''
         assert pixel value range is 0-255 and type is uint8
     '''
-    # TODO Add psnr calculation according to pixel number
     mse = ((im1.astype(np.float) - im2.astype(np.float)) ** 2).mean() * area
     mse /= count
     psnr = 10 * np.log10(255 ** 2 / mse)
