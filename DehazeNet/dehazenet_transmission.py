@@ -26,6 +26,7 @@ IMAGE_A = 1
 IMAGE_BETA = 2
 
 PRODUCER_FINISH = False
+START_CONDITION = threading.Condition()
 
 
 class Task:
@@ -64,9 +65,11 @@ class TransProducer(threading.Thread):
             task = Task(clear_index, float(image_alpha), float(image_beta), trans_read_image_array(clear_image_path),
                         trans_read_image_array(hazy_image_path))
             self.task_queue.put(task)
-        self.wrlock.acquire_write()
-        PRODUCER_FINISH = True
-        self.wrlock.release()
+            if START_CONDITION.acquire():
+                START_CONDITION.notify_all()
+            START_CONDITION.release()
+        # Put a exit signal into the queue to inform the producer
+        self.task_queue.put(None)
         print('Producer finish')
 
 
@@ -77,12 +80,19 @@ class TransConsumer(threading.Thread):
         self.wrlock = wrlock
 
     def run(self):
-        while not self.task_queue.empty() or not PRODUCER_FINISH:
+        if START_CONDITION.acquire():
+            START_CONDITION.wait()
+        START_CONDITION.release()
+        while True:
             # task_queue is empty and all images are loaded(consumer end)
             task = self.task_queue.get()
-            t = trans_get_transmission_map(task)
-            np.save(os.path.join(TRANSMISSION_DIR, task.index + '_' + str(task.a) + '_' + str(task.beta) + '.npy'), t)
-            time.sleep(0.001)   # Sleep for 1 millisecond
+            if task is None:
+                self.task_queue.put(None)
+                break
+            else:
+                t = trans_get_transmission_map(task)
+                np.save(os.path.join(TRANSMISSION_DIR, task.index + '_' + str(task.a) + '_' + str(task.beta) + '.npy'), t)
+                time.sleep(0.001)   # Sleep for 1 millisecond
         print('Consumer finish')
 
 
