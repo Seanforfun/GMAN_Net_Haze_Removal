@@ -11,6 +11,8 @@ import threading
 import queue
 import pickle
 import math
+import time
+import multiprocessing
 
 
 GROUP_NUM = 10
@@ -30,6 +32,59 @@ RESULT_DIR = "./ClearResultImages"
 TRANSMISSION_DIR = "./ClearImages/TransImages"
 
 q_lock = threading.Lock()
+START_CONDITION = threading.Condition()
+
+
+class StatisticProducer(threading.Thread):
+    def __init__(self, task_queue, result_dir):
+        threading.Thread.__init__(self)
+        self.task_queue = task_queue
+        self.result_dir = result_dir
+
+    def run(self):
+        result_file_list = os.listdir(self.result_dir)
+        # Read clear image, result image and their corresponding transmission image.
+        # Get the three corresponding matrices for a single image.
+        for result_image_name in result_file_list:
+            result_single_dir = os.path.join(RESULT_DIR, result_image_name)
+            clear_index = result_image_name[0:CLEAR_INDEX_BIT]
+            trans_index = result_image_name[0:TRANS_INDEX_BIT]
+            if clear_index not in CLEAR_DICTIONARY:
+                raise RuntimeError(result_image_name + ' cannot find corresponding clear image.')
+            clear_single_dir = CLEAR_DICTIONARY[clear_index]
+            if trans_index not in TRANSMISSION_DICTIONARY:
+                raise RuntimeError(result_image_name + ' cannot find corresponding transmission image.')
+            transmission_single_dir = TRANSMISSION_DICTIONARY[trans_index]
+            clear, result, transmission = sta_read_image(clear_single_dir, result_single_dir, transmission_single_dir)
+            current_task = ImageTask(clear, result, transmission)
+            self.task_queue.put(current_task)
+            if START_CONDITION.acquire():
+                START_CONDITION.notifyAll()
+            START_CONDITION.release()
+        self.task_queue.put(None)
+        print('StatisticProducer finish')
+
+
+class StatisticConsumer(threading.Thread):
+    def __init__(self, pq, task_queue):
+        threading.Thread.__init__(self)
+        self.pq = pq
+        self.task_queue = task_queue
+
+    def run(self):
+        if START_CONDITION.acquire():
+            START_CONDITION.wait()
+        START_CONDITION.release()
+        while True:
+            task = self.task_queue.get()
+            if task is None:
+                self.task_queue.put(None)
+                break
+            else:
+                # Put the results into the priority queue
+                sta_cal_single_image_by_pixel(task.clear_arr, task.result_arr, task.trans_arr, self.pq)
+                time.sleep(0.0001)  # Sleep for 1 millisecond
+        print('StatisticConsumer finish')
 
 
 class PixelResult(object):
@@ -39,6 +94,13 @@ class PixelResult(object):
 
     def __lt__(self, other):
         return self.transmission < other.transmission
+
+
+class ImageTask:
+    def __init__(self, clear_image_arr, result_image_arr, transmission_arr):
+        self.clear_arr = clear_image_arr
+        self.result_arr = result_image_arr
+        self.trans_arr = transmission_arr
 
 
 def sta_cal_psnr(im1, im2, area, count):
@@ -108,22 +170,16 @@ def sta_cal_single_image_by_area(clear, result, transmission, psnr_map, group_id
     q_lock.release()
 
 
-def sta_cal_single_image_by_pixel(clear, result, transmission, q, group_id, divide):
-    low_boundary = group_id * divide
-    up_boundary = low_boundary + divide
+def sta_cal_single_image_by_pixel(clear, result, transmission, q):
     shape = np.shape(clear)
     H = shape[0]
     W = shape[1]
     for h in range(H):
         for w in range(W):
             pixel_transmission = transmission[h][w]
-            if low_boundary <= pixel_transmission < up_boundary:
-                # Calculate psnr for single pixel and save into priority queue
-                pixel_mse = sta_cal_mse_pixel(clear[h, w, :], result[h, w, :])
-                pixel_result = PixelResult(pixel_transmission, pixel_mse)
-                q_lock.acquire()
-                q.put(pixel_result)
-                q_lock.release()
+            pixel_mse = sta_cal_mse_pixel(clear[h, w, :], result[h, w, :])
+            pixel_result = PixelResult(pixel_transmission, pixel_mse)
+            q.put(pixel_result)
 
 
 def sta_read_image(clear_image_dir, result_image_dir, transmission_map_dir):
@@ -134,38 +190,13 @@ def sta_read_image(clear_image_dir, result_image_dir, transmission_map_dir):
     clear = np.array(clear_image)
     result_image = Image.open(result_image_dir)
     result = np.array(result_image)
-    transmission_image = Image.open(transmission_map_dir)
-    transmission = np.array(transmission_image)
+    # the Transmission map might save as .npy file
+    if transmission_map_dir.endswith(".npy"):
+        transmission = np.load(transmission_map_dir)
+    else:
+        transmission_image = Image.open(transmission_map_dir)
+        transmission = np.array(transmission_image)
     return clear, result, transmission
-
-
-def sta_do_statistic(divide, thread_pool, q):
-    result_file_list = os.listdir(RESULT_DIR)
-    # Read clear image, result image and their corresponding transmission image.
-    # Get the three corresponding matrices for a single image.
-    for result_image_name in result_file_list:
-        result_single_dir = os.path.join(RESULT_DIR, result_image_name)
-        clear_index = result_image_name[0:CLEAR_INDEX_BIT]
-        trans_index = result_image_name[0:TRANS_INDEX_BIT]
-        if clear_index not in CLEAR_DICTIONARY:
-            raise RuntimeError(result_image_name + ' cannot find corresponding clear image.')
-        clear_single_dir = CLEAR_DICTIONARY[clear_index]
-        if trans_index not in TRANSMISSION_DICTIONARY:
-            raise RuntimeError(result_image_name + ' cannot find corresponding transmission image.')
-        transmission_single_dir = TRANSMISSION_DICTIONARY[trans_index]
-        clear, result, transmission = sta_read_image(clear_single_dir, result_single_dir, transmission_single_dir)
-        #  Traversal every pixel on the image and get a map for each group of the image.
-        #  image in the same group = old image .* map
-        # Calculate PSNR for all of the group respectively and record them into psnr_map.
-        task_list = []  # Create a list to save all tasks
-        # psnr_map = {}  # Map to write PSNR result. Mutual information, need to add a lock.
-        for i in range(GROUP_NUM):
-            lst_vars = [clear, result, transmission, q, i, divide]
-            func_var = [(lst_vars, None)]
-            task_list.append(threadpool.makeRequests(sta_cal_single_image_by_pixel, func_var))
-        for requests in task_list:
-            [thread_pool.putRequest(req) for req in requests]
-        thread_pool.wait()
 
 
 def sta_group_count_average(low, group_length, result_list):
@@ -208,14 +239,27 @@ def main():
     # Group order: 0, 1, 2 ... GROUP_NUM-1
     divide = (1 / GROUP_NUM) * 255
     sorted_pickle_list = []
-    # Create a thread pool, # of thread = GROUP_NUM * 2.
-    pool = threadpool.ThreadPool(GROUP_NUM * 2)
+    CPU_NUM = multiprocessing.cpu_count()
     if START_CALCULATION:
         # call dehazenet_input to read the images directory.
         sta_image_input(CLEAR_DIR, TRANSMISSION_DIR)
         q = queue.PriorityQueue()
+        task_queue = queue.Queue()
+        thread_list = []
         #  Start doing statistic calculation
-        sta_do_statistic(divide, pool, q)
+        statistic_producer = StatisticProducer(task_queue, RESULT_DIR)
+        statistic_producer.start()
+        thread_list.append(statistic_producer)
+
+        for producer_id in range(CPU_NUM - 1):
+            statistic_consumer = StatisticConsumer(q, task_queue)
+            statistic_consumer.start()
+            thread_list.append(statistic_consumer)
+
+        for thread in thread_list:
+            thread.join()
+        print('Producer-Consumer model calculation finish, Start doing statistical calculation.')
+
         while not q.empty():
             sorted_pickle_list.append(q.get())
         del q
@@ -235,6 +279,8 @@ def main():
                 sorted_pickle_list = pickle.load(f) # load priority queue from file
 
     # Use the data from calculation or serialization file to create the statistical result
+    # Create a thread pool, # of thread = GROUP_NUM * 2.
+    pool = threadpool.ThreadPool(GROUP_NUM * 2)
     sta_create_visual_result(sorted_pickle_list, pool)
     print(FINAL_RESULT_MAP)
 
