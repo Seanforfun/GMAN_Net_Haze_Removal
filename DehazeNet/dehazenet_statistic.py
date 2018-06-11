@@ -237,7 +237,6 @@ def sta_create_visual_result(result_list, pool):
 
 def main():
     # Group order: 0, 1, 2 ... GROUP_NUM-1
-    divide = (1 / GROUP_NUM) * 255
     sorted_pickle_list = []
     CPU_NUM = multiprocessing.cpu_count()
     if START_CALCULATION:
@@ -251,37 +250,42 @@ def main():
         statistic_producer.start()
         thread_list.append(statistic_producer)
 
-        for producer_id in range(CPU_NUM - 1):
+        for producer_id in range(CPU_NUM):
             statistic_consumer = StatisticConsumer(q, task_queue)
             statistic_consumer.start()
             thread_list.append(statistic_consumer)
 
         for thread in thread_list:
             thread.join()
-        print('Producer-Consumer model calculation finish, Start doing statistical calculation.')
+        print('Step 1 : Producer-Consumer model calculation finish, Start doing statistical calculation.')
 
         while not q.empty():
             sorted_pickle_list.append(q.get())
         del q
+        print("Step 2 : Finish copying queue to the list.")
         # Serialization the priority queue to SERIALIZATION_FILE_NAME
         if NEED_SERIALIZATION:
             if os.path.exists(SERIALIZATION_FILE_NAME):
                 os.remove(SERIALIZATION_FILE_NAME)
             with open(SERIALIZATION_FILE_NAME, 'wb') as f:
                 pickle.dump(sorted_pickle_list, f)   # Dump the queue into file
+            print("Step 2.1 : Finish dump list to file.")
 
     else:
         # Load the queue from file
+        print("Step 1 : Start loading dump file.")
         if not os.path.exists(SERIALIZATION_FILE_NAME):
             raise RuntimeError("Serialization file does not exist!")
         else:
             with open(SERIALIZATION_FILE_NAME, 'rb') as f:
                 sorted_pickle_list = pickle.load(f) # load priority queue from file
+            print("Step 2 : Finish loading the list from .pkl file.")
 
     # Use the data from calculation or serialization file to create the statistical result
     # Create a thread pool, # of thread = GROUP_NUM * 2.
     pool = threadpool.ThreadPool(GROUP_NUM * 2)
     sta_create_visual_result(sorted_pickle_list, pool)
+    print("Step 3 : Finish calculating visual result.")
     print(FINAL_RESULT_MAP)
 
 

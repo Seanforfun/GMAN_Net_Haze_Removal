@@ -13,7 +13,6 @@ import time
 import WRLock
 import multiprocessing
 
-# TODO Need to fill the directory
 CLEAR_DIR = './ClearImages/TestImages'
 HAZY_DIR = './HazeImages/TestImages'
 TRANSMISSION_DIR = './ClearImages/TransImages'
@@ -25,7 +24,6 @@ IMAGE_INDEX = 0
 IMAGE_A = 1
 IMAGE_BETA = 2
 
-PRODUCER_FINISH = False
 START_CONDITION = threading.Condition()
 
 
