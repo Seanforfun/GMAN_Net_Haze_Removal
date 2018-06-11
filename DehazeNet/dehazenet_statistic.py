@@ -23,7 +23,7 @@ NEED_SERIALIZATION = True
 CLEAR_DICTIONARY = {}
 TRANSMISSION_DICTIONARY = {}
 SERIALIZATION_FILE_NAME = './PQ.pkl'
-START_CALCULATION = False
+START_CALCULATION = True
 FINAL_RESULT_MAP = {}   # key is the lowest transmission in current group, value is average mse.
 # q = PriorityQueue()  # Priority queue used to save pixel psnr information in increasing order, need lock
 
@@ -33,19 +33,24 @@ TRANSMISSION_DIR = "./ClearImages/TransImages"
 
 q_lock = threading.Lock()
 START_CONDITION = threading.Condition()
+RESULT_IMAGE_QUEUE = queue.Queue()
 
 
 class StatisticProducer(threading.Thread):
-    def __init__(self, task_queue, result_dir):
+    def __init__(self, task_queue, result_queue):
         threading.Thread.__init__(self)
         self.task_queue = task_queue
-        self.result_dir = result_dir
+        self.result_queue = result_queue
 
     def run(self):
-        result_file_list = os.listdir(self.result_dir)
-        # Read clear image, result image and their corresponding transmission image.
-        # Get the three corresponding matrices for a single image.
-        for result_image_name in result_file_list:
+        while True:
+            # Read clear image, result image and their corresponding transmission image.
+            # Get the three corresponding matrices for a single image.
+            result_image_name = self.result_queue.get()
+            if result_image_name is None:
+                RESULT_IMAGE_QUEUE.put(None)
+                self.task_queue.put(None)
+                break
             result_single_dir = os.path.join(RESULT_DIR, result_image_name)
             clear_index = result_image_name[0:CLEAR_INDEX_BIT]
             trans_index = result_image_name[0:TRANS_INDEX_BIT]
@@ -61,7 +66,6 @@ class StatisticProducer(threading.Thread):
             if START_CONDITION.acquire():
                 START_CONDITION.notifyAll()
             START_CONDITION.release()
-        self.task_queue.put(None)
         print('StatisticProducer finish')
 
 
@@ -83,7 +87,7 @@ class StatisticConsumer(threading.Thread):
             else:
                 # Put the results into the priority queue
                 sta_cal_single_image_by_pixel(task.clear_arr, task.result_arr, task.trans_arr, self.pq)
-                time.sleep(0.0001)  # Sleep for 1 millisecond
+                # time.sleep(0.0001)  # Sleep for 1 millisecond
         print('StatisticConsumer finish')
 
 
@@ -125,10 +129,11 @@ def sta_cal_mse_pixel(pixel1, pixel2):
 
 
 # Read clear and transmission images from dictionary and create two dictionary for the files for referencing
-def sta_image_input(clear_dir, transmission_dir):
+def sta_image_input(clear_dir, transmission_dir, result_dir):
     # First read the file names from clear directory
     clear_file_list = os.listdir(clear_dir)
     transmission_file_list = os.listdir(transmission_dir)
+    result_file_list = os.listdir(result_dir)
     # Construct a dictionary for clear images
     for clear_image_name in clear_file_list:
         file_path = os.path.join(clear_dir, clear_image_name)
@@ -140,6 +145,10 @@ def sta_image_input(clear_dir, transmission_dir):
         file_path = os.path.join(transmission_dir, transmission_image_name)
         transmission_index = transmission_image_name[0:TRANS_INDEX_BIT]
         TRANSMISSION_DICTIONARY[transmission_index] = file_path
+
+    for result_image_name in result_file_list:
+        RESULT_IMAGE_QUEUE.put(result_image_name)
+    RESULT_IMAGE_QUEUE.put(None)
 
 
 # Process single image using by transmission area.
@@ -187,9 +196,9 @@ def sta_read_image(clear_image_dir, result_image_dir, transmission_map_dir):
     # Assert H and W are the same.
     # Return matrices for three images.
     clear_image = Image.open(clear_image_dir)
-    clear = np.array(clear_image)
+    clear = np.array(clear_image) / 255
     result_image = Image.open(result_image_dir)
-    result = np.array(result_image)
+    result = np.array(result_image) / 255
     # the Transmission map might save as .npy file
     if transmission_map_dir.endswith(".npy"):
         transmission = np.load(transmission_map_dir)
@@ -239,18 +248,20 @@ def main():
     # Group order: 0, 1, 2 ... GROUP_NUM-1
     sorted_pickle_list = []
     CPU_NUM = multiprocessing.cpu_count()
+    print(CPU_NUM)
     if START_CALCULATION:
         # call dehazenet_input to read the images directory.
-        sta_image_input(CLEAR_DIR, TRANSMISSION_DIR)
+        sta_image_input(CLEAR_DIR, TRANSMISSION_DIR, RESULT_DIR)
         q = queue.PriorityQueue()
         task_queue = queue.Queue()
         thread_list = []
         #  Start doing statistic calculation
-        statistic_producer = StatisticProducer(task_queue, RESULT_DIR)
-        statistic_producer.start()
-        thread_list.append(statistic_producer)
+        for producer_id in range(int(CPU_NUM / 3)):
+            statistic_producer = StatisticProducer(task_queue, RESULT_IMAGE_QUEUE)
+            statistic_producer.start()
+            thread_list.append(statistic_producer)
 
-        for producer_id in range(CPU_NUM):
+        for consumer_id in range(CPU_NUM):
             statistic_consumer = StatisticConsumer(q, task_queue)
             statistic_consumer.start()
             thread_list.append(statistic_consumer)

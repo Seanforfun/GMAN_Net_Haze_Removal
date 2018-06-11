@@ -38,7 +38,7 @@ class Task:
 
 def trans_read_image_array(image_path):
     image = Image.open(image_path)
-    return np.array(image)
+    return np.array(image) / 255
 
 
 class TransProducer(threading.Thread):
@@ -98,8 +98,8 @@ def trans_get_transmission_map(task):
     clear_array = task.clear_image_array
     hazy_array = task.hazy_image_array
     shape = np.shape(clear_array)
-    alpha_matrix = np.ones(shape) * task.a
-    return (hazy_array - alpha_matrix) / (clear_array - alpha_matrix)
+    alpha_matrix = np.ones((shape[0], shape[1])) * task.a
+    return (hazy_array[:,:,0] - alpha_matrix) / (clear_array[:,:,0] - alpha_matrix)
 
 
 def trans_input(clear_dir):
