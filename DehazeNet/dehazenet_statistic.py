@@ -23,7 +23,7 @@ NEED_SERIALIZATION = True
 CLEAR_DICTIONARY = {}
 TRANSMISSION_DICTIONARY = {}
 SERIALIZATION_FILE_NAME = './PQ.pkl'
-START_CALCULATION = True
+START_CALCULATION = False
 FINAL_RESULT_MAP = {}   # key is the lowest transmission in current group, value is average mse.
 # q = PriorityQueue()  # Priority queue used to save pixel psnr information in increasing order, need lock
 
@@ -286,7 +286,13 @@ def main():
     pool = threadpool.ThreadPool(GROUP_NUM * 2)
     sta_create_visual_result(sorted_pickle_list, pool)
     print("Step 3 : Finish calculating visual result.")
-    print(FINAL_RESULT_MAP)
+    result_queue = queue.PriorityQueue()
+    for key in FINAL_RESULT_MAP.keys():
+        single_column = PixelResult(key, FINAL_RESULT_MAP[key])
+        result_queue.put(single_column)
+    while not result_queue.empty():
+        result_column = result_queue.get()
+        print(str(result_column.transmission) + ": " + str(result_column.mse))
 
 
 if __name__ == '__main__':
