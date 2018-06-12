@@ -11,7 +11,7 @@ import threading
 import queue
 import pickle
 import math
-import time
+import dehazenet_transmission
 import multiprocessing
 
 
@@ -42,6 +42,7 @@ class StatisticProducer(threading.Thread):
         self.task_queue = task_queue
         self.result_queue = result_queue
 
+
     def run(self):
         while True:
             # Read clear image, result image and their corresponding transmission image.
@@ -61,7 +62,9 @@ class StatisticProducer(threading.Thread):
                 raise RuntimeError(result_image_name + ' cannot find corresponding transmission image.')
             transmission_single_dir = TRANSMISSION_DICTIONARY[trans_index]
             clear, result, transmission = sta_read_image(clear_single_dir, result_single_dir, transmission_single_dir)
-            current_task = ImageTask(clear, result, transmission)
+            [_, filename] = os.path.split(transmission_single_dir)
+            _, alpha, beta = dehazenet_transmission.trans_get_alpha_beta(filename)
+            current_task = ImageTask(clear, result, transmission, alpha, beta)
             self.task_queue.put(current_task)
             if START_CONDITION.acquire():
                 START_CONDITION.notifyAll()
@@ -85,6 +88,9 @@ class StatisticConsumer(threading.Thread):
                 self.task_queue.put(None)
                 break
             else:
+                alpha = task.alpha
+                beta = task.beta
+                # TODO Need to finish this part by using hashMap.
                 # Put the results into the priority queue
                 sta_cal_single_image_by_pixel(task.clear_arr, task.result_arr, task.trans_arr, self.pq)
                 # time.sleep(0.0001)  # Sleep for 1 millisecond
@@ -101,10 +107,12 @@ class PixelResult(object):
 
 
 class ImageTask:
-    def __init__(self, clear_image_arr, result_image_arr, transmission_arr):
+    def __init__(self, clear_image_arr, result_image_arr, transmission_arr, alpha, beta):
         self.clear_arr = clear_image_arr
         self.result_arr = result_image_arr
         self.trans_arr = transmission_arr
+        self.alpha = alpha
+        self.beta = beta
 
 
 def sta_cal_psnr(im1, im2, area, count):
@@ -256,7 +264,7 @@ def main():
         task_queue = queue.Queue()
         thread_list = []
         #  Start doing statistic calculation
-        for producer_id in range(int(CPU_NUM / 3)):
+        for producer_id in range(int(CPU_NUM)):
             statistic_producer = StatisticProducer(task_queue, RESULT_IMAGE_QUEUE)
             statistic_producer.start()
             thread_list.append(statistic_producer)
@@ -271,7 +279,9 @@ def main():
         print('Step 1 : Producer-Consumer model calculation finish, Start doing statistical calculation.')
 
         while not q.empty():
-            sorted_pickle_list.append(q.get())
+            pixel_result = q.get()
+            sorted_pickle_list.append(pixel_result)
+            del pixel_result
         del q
         print("Step 2 : Finish copying queue to the list.")
         # Serialization the priority queue to SERIALIZATION_FILE_NAME

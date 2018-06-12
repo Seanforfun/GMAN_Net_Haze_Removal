@@ -41,6 +41,12 @@ def trans_read_image_array(image_path):
     return np.array(image) / 255
 
 
+def trans_get_alpha_beta(filename_with_extension):
+    filename, file_extension = os.path.splitext(filename_with_extension)
+    filename_split = filename.split('_')
+    return filename_split[IMAGE_INDEX], filename_split[IMAGE_A], filename_split[IMAGE_BETA]
+
+
 class TransProducer(threading.Thread):
     # Add tasks into task queue.
     def __init__(self, hazy_dir, task_queue, wrlock):
@@ -53,11 +59,7 @@ class TransProducer(threading.Thread):
     def run(self):
         file_list = os.listdir(self.hazy_dir)
         for hazy_image in file_list:
-            filename, file_extension = os.path.splitext(hazy_image)
-            hazed_image_split = filename.split('_')
-            clear_index = hazed_image_split[IMAGE_INDEX]
-            image_alpha = hazed_image_split[IMAGE_A]
-            image_beta = hazed_image_split[IMAGE_BETA]
+            clear_index, image_alpha, image_beta = trans_get_alpha_beta(hazy_image)
             clear_image_path = CLEAR_IMAGE_DICTIONARY[clear_index]
             hazy_image_path = os.path.join(self.hazy_dir, hazy_image)
             task = Task(clear_index, float(image_alpha), float(image_beta), trans_read_image_array(clear_image_path),
