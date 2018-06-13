@@ -24,8 +24,10 @@ CLEAR_DICTIONARY = {}
 TRANSMISSION_DICTIONARY = {}
 SERIALIZATION_FILE_NAME = './PQ.pkl'
 START_CALCULATION = True
-FINAL_RESULT_MAP = {}   # key is the lowest transmission in current group, value is average mse.
 # q = PriorityQueue()  # Priority queue used to save pixel psnr information in increasing order, need lock
+# key: (alpha, beta) value:(lock, list)
+TEMP_RESULT_BAG = {}
+SERIALIZATION_BAG = {}
 
 CLEAR_DIR = "./ClearImages/TestImages"
 RESULT_DIR = "./ClearResultImages"
@@ -41,7 +43,6 @@ class StatisticProducer(threading.Thread):
         threading.Thread.__init__(self)
         self.task_queue = task_queue
         self.result_queue = result_queue
-
 
     def run(self):
         while True:
@@ -69,14 +70,17 @@ class StatisticProducer(threading.Thread):
             if START_CONDITION.acquire():
                 START_CONDITION.notifyAll()
             START_CONDITION.release()
-        print('StatisticProducer finish')
+        print('Statistic Producer finish')
 
 
 class StatisticConsumer(threading.Thread):
-    def __init__(self, pq, task_queue):
+    producer_end_number = 0
+
+    def __init__(self, task_queue, producer_number, lock):
         threading.Thread.__init__(self)
-        self.pq = pq
         self.task_queue = task_queue
+        self.producer_number = producer_number
+        self.lock = lock
 
     def run(self):
         if START_CONDITION.acquire():
@@ -85,16 +89,24 @@ class StatisticConsumer(threading.Thread):
         while True:
             task = self.task_queue.get()
             if task is None:
+                self.lock.acquire()
+                StatisticConsumer.producer_end_number += 1
+                if StatisticConsumer.producer_end_number >= self.producer_number:
+                    self.lock.release()
+                    break
+                self.lock.release()
                 self.task_queue.put(None)
-                break
             else:
                 alpha = task.alpha
                 beta = task.beta
-                # TODO Need to finish this part by using hashMap.
+                # If alpha and bata pair is not contained in the dictionary
+                if (alpha, beta) not in TEMP_RESULT_BAG:
+                    TEMP_RESULT_BAG[(alpha, beta)] = queue.PriorityQueue()
                 # Put the results into the priority queue
-                sta_cal_single_image_by_pixel(task.clear_arr, task.result_arr, task.trans_arr, self.pq)
+                sta_cal_single_image_by_pixel(task.clear_arr, task.result_arr, task.trans_arr,
+                                              TEMP_RESULT_BAG[(alpha, beta)])
                 # time.sleep(0.0001)  # Sleep for 1 millisecond
-        print('StatisticConsumer finish')
+        print('Statistic Consumer finish')
 
 
 class PixelResult(object):
@@ -193,10 +205,7 @@ def sta_cal_single_image_by_pixel(clear, result, transmission, q):
     W = shape[1]
     for h in range(H):
         for w in range(W):
-            pixel_transmission = transmission[h][w]
-            pixel_mse = sta_cal_mse_pixel(clear[h, w, :], result[h, w, :])
-            pixel_result = PixelResult(pixel_transmission, pixel_mse)
-            q.put(pixel_result)
+            q.put(PixelResult(transmission[h][w], sta_cal_mse_pixel(clear[h, w, :], result[h, w, :])))
 
 
 def sta_read_image(clear_image_dir, result_image_dir, transmission_map_dir):
@@ -216,7 +225,7 @@ def sta_read_image(clear_image_dir, result_image_dir, transmission_map_dir):
     return clear, result, transmission
 
 
-def sta_group_count_average(low, group_length, result_list):
+def sta_group_count_average(low, group_length, result_list, final_result_map):
     up = low + group_length
     total_mse = 0.0
     t = result_list[low].transmission
@@ -224,29 +233,48 @@ def sta_group_count_average(low, group_length, result_list):
         single_pixel_result = result_list[low]
         total_mse += single_pixel_result.mse
         low += 1
-    q_lock.acquire()
-    FINAL_RESULT_MAP[t] = total_mse/group_length
-    q_lock.release()
+    final_result_map[t] = total_mse/group_length
 
 
-def sta_create_visual_result(result_list, pool):
-    # result_list is a list used to save the PixelResults, which is sorted at the previous step.
-    result_len = len(result_list)
-    '''
-        How are lists implemented?
-    Python’s lists are really variable-length arrays, not Lisp-style linked lists. The implementation uses a contiguous array of references to other objects, and keeps a pointer to this array and the array’s length in a list head structure.
-    This makes indexing a list a[i] an operation whose cost is independent of the size of the list or the value of the index.
-    When items are appended or inserted, the array of references is resized. Some cleverness is applied to improve the performance of appending items repeatedly; when the array must be grown, some extra space is allocated so the next few times don’t require an actual resize.
-    '''
-    # Internally is an array saving pointer, like arrayList in Java.
-    # Calculate upper and lower index boundary for each group in list.
-    group_length = math.floor(result_len / GROUP_NUM)
+def sta_create_visual_result(result_map, pool, double_map):
     task_list = []
-    for i in range(GROUP_NUM):
-        low = group_length * i
-        lst_vars = [low, group_length, result_list]
+    # result_map is a dictionary used to save result for different alpha and beta
+    for key in result_map.keys():
+        single_key_list = result_map[key]   # elements in single_key_list shares same alpha and beta
+        double_map[key] = {}    # {key:{}, {}}, initialization
+        result_len = len(single_key_list)
+        '''
+               How are lists implemented?
+           Python’s lists are really variable-length arrays, not Lisp-style linked lists. The implementation uses a contiguous array of references to other objects, and keeps a pointer to this array and the array’s length in a list head structure.
+           This makes indexing a list a[i] an operation whose cost is independent of the size of the list or the value of the index.
+           When items are appended or inserted, the array of references is resized. Some cleverness is applied to improve the performance of appending items repeatedly; when the array must be grown, some extra space is allocated so the next few times don’t require an actual resize.
+        '''
+        group_length = math.floor(result_len / GROUP_NUM)
+        for i in range(GROUP_NUM):
+            low = group_length * i
+            lst_vars = [low, group_length, single_key_list, double_map[key]]
+            func_var = [(lst_vars, None)]
+            task_list.append(threadpool.makeRequests(sta_group_count_average, func_var))
+        for requests in task_list:
+            [pool.putRequest(req) for req in requests]
+        pool.wait()
+
+
+def sta_single_queue_2_list(pq, dump_list):
+    while not pq.empty():
+        pixel_result = pq.get()
+        dump_list.append(pixel_result)
+        del pixel_result    # gc
+    del pq
+
+
+def sta_queue_2_list(result_map, serialization_map,  pool):
+    task_list = []
+    for key in TEMP_RESULT_BAG.keys():
+        serialization_map[key] = []
+        lst_vars = [result_map[key], serialization_map[key]]
         func_var = [(lst_vars, None)]
-        task_list.append(threadpool.makeRequests(sta_group_count_average, func_var))
+        task_list.append(threadpool.makeRequests(sta_single_queue_2_list, func_var))
     for requests in task_list:
         [pool.putRequest(req) for req in requests]
     pool.wait()
@@ -254,42 +282,43 @@ def sta_create_visual_result(result_list, pool):
 
 def main():
     # Group order: 0, 1, 2 ... GROUP_NUM-1
-    sorted_pickle_list = []
-    CPU_NUM = multiprocessing.cpu_count()
-    print(CPU_NUM)
+    cpu_number = multiprocessing.cpu_count()
+    serialization_bag = {}
+    # Use the data from calculation or serialization file to create the statistical result
+    # Create a thread pool, # of thread = GROUP_NUM * 2.
+    pool = threadpool.ThreadPool(GROUP_NUM * 4)
     if START_CALCULATION:
         # call dehazenet_input to read the images directory.
         sta_image_input(CLEAR_DIR, TRANSMISSION_DIR, RESULT_DIR)
-        q = queue.PriorityQueue()
         task_queue = queue.Queue()
         thread_list = []
         #  Start doing statistic calculation
-        for producer_id in range(int(CPU_NUM)):
+        for producer_id in range(int(cpu_number)):
             statistic_producer = StatisticProducer(task_queue, RESULT_IMAGE_QUEUE)
             statistic_producer.start()
             thread_list.append(statistic_producer)
 
-        for consumer_id in range(CPU_NUM):
-            statistic_consumer = StatisticConsumer(q, task_queue)
+        consumer_static_lock = threading.Lock()
+        for consumer_id in range(cpu_number):
+            statistic_consumer = StatisticConsumer(task_queue, cpu_number, consumer_static_lock)
             statistic_consumer.start()
             thread_list.append(statistic_consumer)
 
         for thread in thread_list:
             thread.join()
+        del task_queue
         print('Step 1 : Producer-Consumer model calculation finish, Start doing statistical calculation.')
 
-        while not q.empty():
-            pixel_result = q.get()
-            sorted_pickle_list.append(pixel_result)
-            del pixel_result
-        del q
+        # For each of the items in TEMP_RESULT_BAG, put items in PriorityQueue to a list for serialization.
+        sta_queue_2_list(TEMP_RESULT_BAG, serialization_bag, pool)
         print("Step 2 : Finish copying queue to the list.")
         # Serialization the priority queue to SERIALIZATION_FILE_NAME
         if NEED_SERIALIZATION:
             if os.path.exists(SERIALIZATION_FILE_NAME):
                 os.remove(SERIALIZATION_FILE_NAME)
             with open(SERIALIZATION_FILE_NAME, 'wb') as f:
-                pickle.dump(sorted_pickle_list, f)   # Dump the queue into file
+                pickle.dump(serialization_bag, f)   # Dump the queue into file
+            f.close()
             print("Step 2.1 : Finish dump list to file.")
 
     else:
@@ -299,21 +328,25 @@ def main():
             raise RuntimeError("Serialization file does not exist!")
         else:
             with open(SERIALIZATION_FILE_NAME, 'rb') as f:
-                sorted_pickle_list = pickle.load(f) # load priority queue from file
+                serialization_bag = pickle.load(f)  # load result map from file
+            f.close()
             print("Step 2 : Finish loading the list from .pkl file.")
 
-    # Use the data from calculation or serialization file to create the statistical result
-    # Create a thread pool, # of thread = GROUP_NUM * 2.
-    pool = threadpool.ThreadPool(GROUP_NUM * 2)
-    sta_create_visual_result(sorted_pickle_list, pool)
+    final_result_double_map = {}    # key is the lowest transmission in current group, value is average mse.
+    sta_create_visual_result(serialization_bag, pool, final_result_double_map)
+    del serialization_bag
     print("Step 3 : Finish calculating visual result.")
-    result_queue = queue.PriorityQueue()
-    for key in FINAL_RESULT_MAP.keys():
-        single_column = PixelResult(key, FINAL_RESULT_MAP[key])
-        result_queue.put(single_column)
-    while not result_queue.empty():
-        result_column = result_queue.get()
-        print(str(result_column.transmission) + ": " + str(result_column.mse))
+
+    for key in final_result_double_map.keys(): # key is (alpha, beta)
+        single_result_map = final_result_double_map[key]
+        result_queue = queue.PriorityQueue()
+        for k in single_result_map.keys():
+            single_column = PixelResult(k, single_result_map[k])
+            result_queue.put(single_column)
+        print('alpha: ' + str(key[0]) + ' ;beta: ' + str(key[1]))
+        while not result_queue.empty():
+            result_column = result_queue.get()
+            print(str(result_column.transmission) + ": " + str(result_column.mse))
 
 
 if __name__ == '__main__':
