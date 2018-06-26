@@ -26,7 +26,7 @@ SERIALIZATION_FILE_NAME = './PQ.pkl'
 START_CALCULATION = True
 # q = PriorityQueue()  # Priority queue used to save pixel psnr information in increasing order, need lock
 # key: (alpha, beta) value:(lock, list)
-TEMP_RESULT_BAG = {}
+# TEMP_RESULT_BAG = {}
 SERIALIZATION_BAG = {}
 
 CLEAR_DIR = "./ClearImages/TestImages"
@@ -76,11 +76,12 @@ class StatisticProducer(threading.Thread):
 class StatisticConsumer(threading.Thread):
     producer_end_number = 0
 
-    def __init__(self, task_queue, producer_number, lock):
+    def __init__(self, task_queue, producer_number, lock, bag):
         threading.Thread.__init__(self)
         self.task_queue = task_queue
         self.producer_number = producer_number
         self.lock = lock
+        self.bag = bag
 
     def run(self):
         if START_CONDITION.acquire():
@@ -100,11 +101,11 @@ class StatisticConsumer(threading.Thread):
                 alpha = task.alpha
                 beta = task.beta
                 # If alpha and bata pair is not contained in the dictionary
-                if (alpha, beta) not in TEMP_RESULT_BAG:
-                    TEMP_RESULT_BAG[(alpha, beta)] = queue.PriorityQueue()
+                if (alpha, beta) not in self.bag:
+                    self.bag[(alpha, beta)] = queue.PriorityQueue()
                 # Put the results into the priority queue
                 sta_cal_single_image_by_pixel(task.clear_arr, task.result_arr, task.trans_arr,
-                                              TEMP_RESULT_BAG[(alpha, beta)])
+                                              self.bag[(alpha, beta)])
                 # time.sleep(0.0001)  # Sleep for 1 millisecond
         print('Statistic Consumer finish')
 
@@ -270,7 +271,7 @@ def sta_single_queue_2_list(pq, dump_list):
 
 def sta_queue_2_list(result_map, serialization_map,  pool):
     task_list = []
-    for key in TEMP_RESULT_BAG.keys():
+    for key in result_map.keys():
         serialization_map[key] = []
         lst_vars = [result_map[key], serialization_map[key]]
         func_var = [(lst_vars, None)]
@@ -287,6 +288,7 @@ def main():
     # Use the data from calculation or serialization file to create the statistical result
     # Create a thread pool, # of thread = GROUP_NUM * 2.
     pool = threadpool.ThreadPool(GROUP_NUM * 4)
+    temp_result_bag = {}
     if START_CALCULATION:
         # call dehazenet_input to read the images directory.
         sta_image_input(CLEAR_DIR, TRANSMISSION_DIR, RESULT_DIR)
@@ -300,7 +302,7 @@ def main():
 
         consumer_static_lock = threading.Lock()
         for consumer_id in range(cpu_number):
-            statistic_consumer = StatisticConsumer(task_queue, cpu_number, consumer_static_lock)
+            statistic_consumer = StatisticConsumer(task_queue, cpu_number, consumer_static_lock, temp_result_bag)
             statistic_consumer.start()
             thread_list.append(statistic_consumer)
 
@@ -310,16 +312,23 @@ def main():
         print('Step 1 : Producer-Consumer model calculation finish, Start doing statistical calculation.')
 
         # For each of the items in TEMP_RESULT_BAG, put items in PriorityQueue to a list for serialization.
-        sta_queue_2_list(TEMP_RESULT_BAG, serialization_bag, pool)
+        sta_queue_2_list(temp_result_bag, serialization_bag, pool)
+        del temp_result_bag
         print("Step 2 : Finish copying queue to the list.")
+
         # Serialization the priority queue to SERIALIZATION_FILE_NAME
         if NEED_SERIALIZATION:
-            if os.path.exists(SERIALIZATION_FILE_NAME):
-                os.remove(SERIALIZATION_FILE_NAME)
-            with open(SERIALIZATION_FILE_NAME, 'wb') as f:
-                pickle.dump(serialization_bag, f)   # Dump the queue into file
-            f.close()
-            print("Step 2.1 : Finish dump list to file.")
+            serialization_file_list = []
+            for key in serialization_bag.keys():
+                serialization_file_name = './alpha_' + str(key[0]) + '_beta_' + str(key[1]) + '.pkl'
+                serialization_file_list.append(serialization_file_name)
+            for filename in serialization_file_list:
+                if os.path.exists(filename):
+                    os.remove(filename)
+                with open(filename, 'wb') as f:
+                    pickle.dump(serialization_bag, f)  # Dump the queue into file
+                f.close()
+        print("Step 2.1 : Finish dump list to file.")
 
     else:
         # Load the queue from file

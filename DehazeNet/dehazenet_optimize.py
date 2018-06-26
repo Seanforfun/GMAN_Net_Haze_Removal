@@ -55,7 +55,12 @@ def opt_get_loss_for_alpha_transmission(alpha, result, haze):
     alpha_matrix = np.ones((shape[0], shape[1])) * alpha
     transmission = []
     for i in range(3):
-        transmission.append((haze[:, :, i] - alpha_matrix) / (result[:, :, i] - alpha_matrix))
+        t = (haze[:, :, i] - alpha_matrix) / (result[:, :, i] - alpha_matrix)
+        where_are_inf = np.isinf(t)
+        t[where_are_inf] = 1
+        where_are_nan = np.isnan(t)
+        t[where_are_nan] = 0
+        transmission.append(t)
     avg_trans = (transmission[0] + transmission[1] + transmission[2]) / 3
     result_loss = 0
     for h in range(H):
@@ -66,17 +71,18 @@ def opt_get_loss_for_alpha_transmission(alpha, result, haze):
     return result_loss
 
 
-def opt_find_best_alpha(result, haze):
+def opt_find_best_alpha(result, haze, alpha):
     min_loss = sys.float_info.max
     best_alpha = None
     a = INITIAL_ALPHA
     while a <= FINAL_ALPHA:
         loss = opt_get_loss_for_alpha_transmission(a, result, haze)
-        print("a: " + str(a) + " loss: " + str(loss))
+        print("a: " + str(round(a, 3)) + " GT: " + alpha + " loss: " + str(loss))
         if loss < min_loss:
             min_loss = loss
             best_alpha = a
         a += STEP_SIZE
+        a = round(a, 3)
     return best_alpha
 
 
@@ -130,7 +136,7 @@ class OptConsumer(threading.Thread):
                 self.lock.release()
                 self.task_queue.put(None)
             else:
-                alpha = opt_find_best_alpha(task.result, task.haze)
+                alpha = opt_find_best_alpha(task.result, task.haze, task.alpha)
                 self.result_queue.put((alpha, task.alpha))
         print('Consumer finish')
 

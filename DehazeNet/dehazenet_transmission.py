@@ -110,7 +110,12 @@ def trans_get_transmission_map(task):
     hazy_array = task.hazy_image_array
     shape = np.shape(clear_array)
     alpha_matrix = np.ones((shape[0], shape[1])) * task.a
-    return (hazy_array[:,:,0] - alpha_matrix) / (clear_array[:,:,0] - alpha_matrix)
+    t = (hazy_array[:,:,0] - alpha_matrix) / (clear_array[:,:,0] - alpha_matrix)
+    where_are_inf = np.isinf(t)
+    t[where_are_inf] = 1
+    where_are_nan = np.isnan(t)
+    t[where_are_nan] = 0
+    return t
 
 
 def trans_input(clear_dir, hazy_dir):
@@ -126,7 +131,7 @@ def trans_input(clear_dir, hazy_dir):
     for hazy_image in hazy_file_list:
         file_path = os.path.join(hazy_dir, hazy_image)
         q.put(file_path)
-    q.put(None) # Add None as the last flag
+    q.put(None)  # Add None as the last flag
     return q
 
 
