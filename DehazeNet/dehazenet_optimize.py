@@ -48,20 +48,32 @@ def opt_input(haze_dir, result_dir):
     return q
 
 
-def opt_get_loss_for_alpha_transmission(alpha, result, haze):
-    shape = np.shape(result)
-    H = shape[0]
-    W = shape[1]
-    alpha_matrix = np.ones((shape[0], shape[1])) * alpha
+def opt_get_transmission_3channel(alpha, result, haze):
     transmission = []
     for i in range(3):
-        t = (haze[:, :, i] - alpha_matrix) / (result[:, :, i] - alpha_matrix)
+        t = (haze[:, :, i] - alpha) / (result[:, :, i] - alpha)
         where_are_inf = np.isinf(t)
         t[where_are_inf] = 1
         where_are_nan = np.isnan(t)
         t[where_are_nan] = 0
         transmission.append(t)
+    return transmission
+
+
+def opt_get_transmission(alpha, result, haze):
+    shape = np.shape(result)
+    alpha_matrix = np.ones((shape[0], shape[1])) * alpha
+    transmission = opt_get_transmission_3channel(alpha_matrix, result, haze)
+    # avg_trans = np.sqrt((transmission[0] ** 2 + transmission[1] ** 2 + transmission[2] ** 2) / 3)
     avg_trans = (transmission[0] + transmission[1] + transmission[2]) / 3
+    return transmission, avg_trans
+
+
+def opt_get_loss_for_alpha_transmission(alpha, result, haze):
+    shape = np.shape(result)
+    H = shape[0]
+    W = shape[1]
+    transmission, avg_trans = opt_get_transmission(alpha, result, haze)
     result_loss = 0
     for h in range(H):
         for w in range(W):
@@ -86,6 +98,27 @@ def opt_find_best_alpha(result, haze, alpha):
     return best_alpha
 
 
+def opt_dehaze_with_alpha_transmission(alpha, avg_transmission, haze):
+    shape = np.shape(haze)
+    result_arr = np.ones(shape)
+    alpha_matrix = np.ones((shape[0], shape[1])) * alpha
+    for i in range(3):
+        result_arr[:, :, i] = (haze[:, :, i] - alpha_matrix * (np.ones((shape[0], shape[1])) - avg_transmission)) \
+                              / avg_transmission
+    where_are_inf = np.isinf(result_arr)
+    result_arr[where_are_inf] = 1
+    return result_arr
+
+
+def opt_create_clear_image(task):
+    _, avg = opt_get_transmission(float(task.alpha), task.result, task.haze)
+    dehaze_array = opt_dehaze_with_alpha_transmission(float(task.alpha), avg, task.haze)
+    dehaze_array *= 255
+    dehaze_array = dehaze_array.astype('uint8')
+    image_truth = Image.fromarray(dehaze_array, 'RGB')
+    image_truth.save('test_pred.jpg', 'jpeg')
+
+
 class OptProducer(threading.Thread):
     def __init__(self, q, task_q):
         threading.Thread.__init__(self)
@@ -99,11 +132,13 @@ class OptProducer(threading.Thread):
                 self.queue.put(None)
                 self.task_queue.put(None)
                 break
-            result_array = np.array(Image.open(single_image)) / 255
+            result_array = np.array(Image.open(single_image))
+            result_array = result_array.astype("float32") / 255
             _, filename = os.path.split(single_image)
             image_index = filename[0:di.IMAGE_INDEX_BIT]
             hazy_image_path, alpha = opt_get_alpha(image_index)
-            hazy_array = np.array(Image.open(hazy_image_path)) / 255
+            hazy_array = np.array(Image.open(hazy_image_path))
+            hazy_array = hazy_array.astype('float32') / 255
             self.task_queue.put(Task(alpha, result_array, hazy_array))
             if START_CONDITION.acquire():
                 START_CONDITION.notify_all()
@@ -136,8 +171,9 @@ class OptConsumer(threading.Thread):
                 self.lock.release()
                 self.task_queue.put(None)
             else:
-                alpha = opt_find_best_alpha(task.result, task.haze, task.alpha)
-                self.result_queue.put((alpha, task.alpha))
+                # alpha = opt_find_best_alpha(task.result, task.haze, task.alpha)
+                # self.result_queue.put((alpha, task.alpha))
+                opt_create_clear_image(task)
         print('Consumer finish')
 
 
@@ -160,9 +196,9 @@ def main():
         thread_list.append(consumer)
     for t in thread_list:
         t.join()
-    while not result_queue.empty():
-        result_tuple = result_queue.get()
-        print("Estimate alpha: " + str(result_tuple[0]) + " Groundtruth: " + str(result_tuple[1]))
+    # while not result_queue.empty():
+    #     result_tuple = result_queue.get()
+    #     print("Estimate alpha: " + str(result_tuple[0]) + " Groundtruth: " + str(result_tuple[1]))
 
 
 if __name__ == '__main__':
