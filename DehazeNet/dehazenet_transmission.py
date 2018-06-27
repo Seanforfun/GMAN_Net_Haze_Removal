@@ -115,6 +115,8 @@ def trans_get_transmission_map(task):
     t[where_are_inf] = 1
     where_are_nan = np.isnan(t)
     t[where_are_nan] = 0
+    t[t < 0] = 0 # Change negative number to zero
+    t[t > 1] = 1    # Change numbers over 1 to 1
     return t
 
 

@@ -67,7 +67,7 @@ def cz_do_count_close_zero(task):
     count = 0
     for h in range(H):
         for w in range(W):
-            if task[h][w] <= 1:
+            if task[h][w] <= 0.01:
                 count += 1
     print("Total size: " + str(size) + " Close Zero: " + str(count))
 
