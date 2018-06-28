@@ -64,7 +64,12 @@ class TransProducer(threading.Thread):
             # Get a correct path
             clear_index, image_alpha, image_beta = trans_get_alpha_beta(os.path.basename(hazy_dict))
             clear_image_path = CLEAR_IMAGE_DICTIONARY[clear_index]
-            task = Task(clear_index, float(image_alpha), float(image_beta), trans_read_image_array(clear_image_path),
+            if image_alpha == str(1):
+                task = Task(clear_index, int(image_alpha), float(image_beta),
+                            trans_read_image_array(clear_image_path),
+                            trans_read_image_array(hazy_dict))
+            else:
+                task = Task(clear_index, float(image_alpha), float(image_beta), trans_read_image_array(clear_image_path),
                         trans_read_image_array(hazy_dict))
             self.task_queue.put(task)
             # if START_CONDITION.acquire():

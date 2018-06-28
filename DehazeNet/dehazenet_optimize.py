@@ -99,13 +99,18 @@ def opt_find_best_alpha(result, haze, alpha):
     return best_alpha
 
 
-def opt_dehaze_with_alpha_transmission(alpha, avg_transmission, haze):
+def opt_dehaze_with_alpha_transmission(alpha, transmission, haze):
     shape = np.shape(haze)
     result_arr = np.ones(shape)
     alpha_matrix = np.ones((shape[0], shape[1])) * float(alpha)
+    # TODO Dehaze for RGB channels
     for i in range(3):
-        result_arr[:, :, i] = (haze[:, :, i] - alpha_matrix * (np.ones((shape[0], shape[1])) - avg_transmission)) \
-                              / avg_transmission
+        result_arr[:, :, i] = (haze[:, :, i] - alpha_matrix * (np.ones((shape[0], shape[1])) - transmission)) \
+                              / transmission
+
+    # TODO Dehaze for R channel(haze[0])
+    # result_arr[:, :, 0] = (haze[:, :, 0] - alpha_matrix * (np.ones((shape[0], shape[1])) - transmission)) \
+    #                               / transmission
     where_are_inf = np.isinf(result_arr)
     result_arr[where_are_inf] = 1
     return result_arr
