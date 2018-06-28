@@ -13,6 +13,7 @@ import pickle
 import math
 import dehazenet_transmission
 import multiprocessing
+import time
 
 
 GROUP_NUM = 10
@@ -67,9 +68,9 @@ class StatisticProducer(threading.Thread):
             _, alpha, beta = dehazenet_transmission.trans_get_alpha_beta(filename)
             current_task = ImageTask(clear, result, transmission, alpha, beta)
             self.task_queue.put(current_task)
-            if START_CONDITION.acquire():
-                START_CONDITION.notifyAll()
-            START_CONDITION.release()
+            # if START_CONDITION.acquire():
+            #     START_CONDITION.notifyAll()
+            # START_CONDITION.release()
         print('Statistic Producer finish')
 
 
@@ -84,9 +85,9 @@ class StatisticConsumer(threading.Thread):
         self.bag = bag
 
     def run(self):
-        if START_CONDITION.acquire():
-            START_CONDITION.wait()
-        START_CONDITION.release()
+        # if START_CONDITION.acquire():
+        #     START_CONDITION.wait()
+        # START_CONDITION.release()
         while True:
             task = self.task_queue.get()
             if task is None:
@@ -300,6 +301,7 @@ def main():
             statistic_producer.start()
             thread_list.append(statistic_producer)
 
+        time.sleep(0.0001)
         consumer_static_lock = threading.Lock()
         for consumer_id in range(cpu_number):
             statistic_consumer = StatisticConsumer(task_queue, cpu_number, consumer_static_lock, temp_result_bag)

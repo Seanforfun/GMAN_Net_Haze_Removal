@@ -6,6 +6,8 @@ import threading
 from PIL import Image as Image
 import dehazenet_optimize as do
 import dehazenet_transmission as dt
+import WRLock
+import time
 
 TRANS_DIR = "./ClearImages/TransImages"
 HAZY_DIR = "./HazeImages/TestImages"
@@ -31,9 +33,9 @@ class OptionsProducer(threading.Thread):
                 break
             arr = np.load(t)
             self.task_queue.put((arr, t))
-            if START_CONDITION.acquire():
-                START_CONDITION.notify_all()
-            START_CONDITION.release()
+            # if START_CONDITION.acquire():
+            #     START_CONDITION.notify_all()
+            # START_CONDITION.release()
         print('Producer finish')
 
 
@@ -47,15 +49,16 @@ class OptionsConsumer(threading.Thread):
         self.producer_num = producer_num
 
     def run(self):
-        if START_CONDITION.acquire():
-            START_CONDITION.wait()
-        START_CONDITION.release()
+        # if START_CONDITION.acquire():
+        #     START_CONDITION.wait()
+        # START_CONDITION.release()
         while True:
             task = self.task_queue.get()
             if task is None:
-                self.lock.acquire()
+                self.lock.acquire_write()
                 OptionsConsumer.producer_end_number += 1
-                if OptionsConsumer.producer_end_number >= self.producer_num:
+                self.lock.demote()
+                if OptionsConsumer.producer_end_number > self.producer_num:
                     self.lock.release()
                     break
                 self.lock.release()
@@ -132,11 +135,13 @@ def main():
     cpu_num = multiprocessing.cpu_count()
     task_queue = queue.Queue()
     thread_list = []
-    flag_lock = threading.Lock()
+    flag_lock = WRLock.RWLock()
     for producer_id in range(cpu_num):
         producer = OptionsProducer(q, task_queue)
         producer.start()
         thread_list.append(producer)
+
+    time.sleep(0.0001)
     for consumer_id in range(cpu_num):
         consumer = OptionsConsumer(task_queue, flag_lock, cpu_num)
         consumer.start()

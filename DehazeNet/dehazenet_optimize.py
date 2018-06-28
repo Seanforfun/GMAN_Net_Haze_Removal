@@ -7,6 +7,7 @@ import dehazenet_transmission as dt
 from PIL import Image as Image
 import sys
 import multiprocessing
+import time
 
 HAZE_DIR = "./HazeImages/TestImages"
 RESULT_DIR = "./ClearResultImages"
@@ -145,9 +146,9 @@ class OptProducer(threading.Thread):
             hazy_array = np.array(Image.open(hazy_image_path))
             hazy_array = hazy_array.astype('float32') / 255
             self.task_queue.put(Task(alpha, result_array, hazy_array))
-            if START_CONDITION.acquire():
-                START_CONDITION.notify_all()
-            START_CONDITION.release()
+            # if START_CONDITION.acquire():
+            #     START_CONDITION.notify_all()
+            # START_CONDITION.release()
         print('Producer finish')
 
 
@@ -162,9 +163,9 @@ class OptConsumer(threading.Thread):
         self.result_queue = result_queue
 
     def run(self):
-        if START_CONDITION.acquire():
-            START_CONDITION.wait()
-        START_CONDITION.release()
+        # if START_CONDITION.acquire():
+        #     START_CONDITION.wait()
+        # START_CONDITION.release()
         while True:
             task = self.task_queue.get()
             if task is None:
@@ -200,6 +201,7 @@ def main():
         producer.start()
         thread_list.append(producer)
 
+    time.sleep(0.0001)
     for consumer_id in range(cpu_num):
         consumer = OptConsumer(task_queue, flag_lock, cpu_num, result_queue)
         consumer.start()

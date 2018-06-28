@@ -67,9 +67,9 @@ class TransProducer(threading.Thread):
             task = Task(clear_index, float(image_alpha), float(image_beta), trans_read_image_array(clear_image_path),
                         trans_read_image_array(hazy_dict))
             self.task_queue.put(task)
-            if START_CONDITION.acquire():
-                START_CONDITION.notify_all()
-            START_CONDITION.release()
+            # if START_CONDITION.acquire():
+            #     START_CONDITION.notify_all()
+            # START_CONDITION.release()
         print('Producer finish')
 
 
@@ -83,9 +83,9 @@ class TransConsumer(threading.Thread):
         self.producer_num = producer_num
 
     def run(self):
-        if START_CONDITION.acquire():
-            START_CONDITION.wait()
-        START_CONDITION.release()
+        # if START_CONDITION.acquire():
+        #     START_CONDITION.wait()
+        # START_CONDITION.release()
         while True:
             # task_queue is empty and all images are loaded(consumer end)
             task = self.task_queue.get()
@@ -146,6 +146,8 @@ def main():
         producer = TransProducer(HAZY_DIR, task_queue, q)
         producer.start()
         thread_list.append(producer)
+
+    time.sleep(0.0001)
     # Consumer: Calculate and save transmission images.
     for consumer_index in range(cpu_number):
         consumer = TransConsumer(task_queue, flag_lock, cpu_number)
