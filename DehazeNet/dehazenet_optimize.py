@@ -101,7 +101,7 @@ def opt_find_best_alpha(result, haze, alpha):
 def opt_dehaze_with_alpha_transmission(alpha, avg_transmission, haze):
     shape = np.shape(haze)
     result_arr = np.ones(shape)
-    alpha_matrix = np.ones((shape[0], shape[1])) * alpha
+    alpha_matrix = np.ones((shape[0], shape[1])) * float(alpha)
     for i in range(3):
         result_arr[:, :, i] = (haze[:, :, i] - alpha_matrix * (np.ones((shape[0], shape[1])) - avg_transmission)) \
                               / avg_transmission
@@ -110,13 +110,18 @@ def opt_dehaze_with_alpha_transmission(alpha, avg_transmission, haze):
     return result_arr
 
 
+def opt_write_result_to_file(result):
+    result *= 255
+    result = result.astype('uint8')
+    result[result > 255] = 255
+    image_truth = Image.fromarray(result, 'RGB')
+    image_truth.save('test_pred.jpg', 'jpeg')
+
+
 def opt_create_clear_image(task):
     _, avg = opt_get_transmission(float(task.alpha), task.result, task.haze)
     dehaze_array = opt_dehaze_with_alpha_transmission(float(task.alpha), avg, task.haze)
-    dehaze_array *= 255
-    dehaze_array = dehaze_array.astype('uint8')
-    image_truth = Image.fromarray(dehaze_array, 'RGB')
-    image_truth.save('test_pred.jpg', 'jpeg')
+    opt_write_result_to_file(dehaze_array)
 
 
 class OptProducer(threading.Thread):
@@ -171,9 +176,14 @@ class OptConsumer(threading.Thread):
                 self.lock.release()
                 self.task_queue.put(None)
             else:
+                # Method 1: When alpha is optimized, the distance between
+                # three channels is minimum, so we can traversal all possible alpha to get correct alpha value.
                 # alpha = opt_find_best_alpha(task.result, task.haze, task.alpha)
                 # self.result_queue.put((alpha, task.alpha))
+
+                # Method 2: Use different method to resolve three t maps to resolve optimized t.
                 opt_create_clear_image(task)
+
         print('Consumer finish')
 
 

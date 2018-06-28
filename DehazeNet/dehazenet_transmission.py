@@ -10,7 +10,6 @@ import threading
 from PIL import Image as Image
 import numpy as np
 import time
-import WRLock
 import multiprocessing
 
 CLEAR_DIR = './ClearImages/TestImages'
@@ -111,13 +110,9 @@ def trans_get_transmission_map(task):
     shape = np.shape(clear_array)
     alpha_matrix = np.ones((shape[0], shape[1])) * task.a
     t = (hazy_array[:,:,0] - alpha_matrix) / (clear_array[:,:,0] - alpha_matrix)
-    where_are_inf = np.isinf(t)
-    t[where_are_inf] = 1
     where_are_nan = np.isnan(t)
     t[where_are_nan] = 0
-    t[t < 0] = 0 # Change negative number to zero
-    t[t > 1] = 1    # Change numbers over 1 to 1
-    return t
+    return np.clip(t, 0, 1) # Change negative number to zero, Change numbers over 1 to 1
 
 
 def trans_input(clear_dir, hazy_dir):
