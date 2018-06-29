@@ -1,3 +1,7 @@
+#  ====================================================
+#   Filename: dehazenet_options.py
+#   Function: This file is used to do several options using transmission.
+#  ====================================================
 import numpy as np
 import queue
 import os
@@ -12,6 +16,7 @@ import matplotlib.pyplot as plt
 import shutil
 from enum import Enum
 from abc import ABCMeta,abstractmethod
+
 
 TRANS_DIR = "./ClearImages/TransImages"
 HAZY_DIR = "./HazeImages/TestImages"
@@ -30,10 +35,11 @@ class Options(Enum):
     GET_TRANSMISSION_HISTOGRAM = 2
     DEHAZE_WITH_TRANSMISSION_MAP = 3
     GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION = 4
+    GET_ESTIMATE_ALPHA = 5
 
 
 # TODO Modify options here
-OPTION = Options.GET_TRANSMISSION_HISTOGRAM
+OPTION = Options.GET_ESTIMATE_ALPHA
 
 
 class OptionFactory:
@@ -49,6 +55,8 @@ class OptionFactory:
             return OptionDehazeUsingTransmissionMap()
         elif option == Options.GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION:
             return OptionCheckDistancesWithSmallTransmission()
+        elif option == Options.GET_ESTIMATE_ALPHA:
+            return OptionGetEstimateAlpha()
         else:
             raise NotImplementedError("Method is not implemented!")
 
@@ -63,6 +71,8 @@ class OptionFactory:
         elif option == Options.DEHAZE_WITH_TRANSMISSION_MAP:
             pass
         elif option == Options.GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION:
+            pass
+        elif option == Options.GET_ESTIMATE_ALPHA:
             pass
         else:
             raise NotImplementedError("Method is not implemented!")
@@ -84,7 +94,7 @@ class IOptionPlot(object):
         pass
 
 
-class OptionDoCountCloseZero(IOption):
+class OptionDoCountCloseZero(IOption, IOptionPlot):
     # Get the number of transmissions under transmission threshold
     def do_option(self, transmission_array, transmission_array_name, result_queue):
         if OPTION != Options.GET_CLOSE_ZERO_TRANSMISSION_STATISTICS:
@@ -101,9 +111,12 @@ class OptionDoCountCloseZero(IOption):
                 if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
                     # single_result = (haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3
                     print("(" + str(round(haze_arr[h][w][0], 3)) + "  " + str(round(haze_arr[h][w][1], 3)) + "  " + str(
-                        round(haze_arr[h][w][2], 3)) + ")")
+                        round(haze_arr[h][w][2], 3)) + "), t: " + str(transmission_array[h][w]))
                     count += 1
         print("Total size: " + str(size) + " Close Zero: " + str(count))
+
+    def draw_mat_plot(self):
+        pass
 
 
 # Calculate three channels value difference and get statistical calculation for all channels
@@ -201,7 +214,8 @@ class OptionGetTransmissionHistogram(IOption, IOptionPlot):
             plt.savefig(os.path.join("./StatisticalFigure", fname_with_ext))
             plt.close()
 
-class OptionDehazeUsingTransmissionMap(IOption):
+
+class OptionDehazeUsingTransmissionMap(IOption, IOptionPlot):
     # Dehaze hazy images using transmission map
     def do_option(self, transmission_array, transmission_name, result_queue):
         if OPTION != Options.DEHAZE_WITH_TRANSMISSION_MAP:
@@ -211,8 +225,11 @@ class OptionDehazeUsingTransmissionMap(IOption):
         _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
         do.opt_write_result_to_file(do.opt_dehaze_with_alpha_transmission(alpha, transmission_array, haze_arr))
 
+    def draw_mat_plot(self):
+        pass
 
-class OptionCheckDistancesWithSmallTransmission(IOption):
+
+class OptionCheckDistancesWithSmallTransmission(IOption, IOptionPlot):
     # Check if the t restriction is satisfied, and check how many pixels match the three channel values are close enough
     def do_option(self, transmission_array, transmission_name, result_queue):
         if OPTION != Options.GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION:
@@ -230,6 +247,44 @@ class OptionCheckDistancesWithSmallTransmission(IOption):
                             abs(haze_arr[h][w][0] - haze_arr[h][w][2]) < THRESHOLD:
                         number_counter += 1
         print(number_counter)
+
+    def draw_mat_plot(self):
+        pass
+
+
+class OptionGetEstimateAlpha(IOption, IOptionPlot):
+
+    class Pixel(object):
+        def __init__(self, transmission, h, w):
+            self.transmission = transmission
+            self.h = h
+            self.w = w
+
+        def __lt__(self, other):
+            return self.transmission < other.transmission
+
+    def do_option(self, transmission_array, transmission_name, result_queue):
+        if OPTION != Options.GET_ESTIMATE_ALPHA:
+            return
+        _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
+        haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
+        pq = queue.PriorityQueue()
+        shape = np.shape(transmission_array)
+        H = shape[0]
+        W = shape[1]
+        point_one_number = int(np.size(transmission_array) * 0.001)
+        maximum_intensity = 0
+        for h in range(H):
+            for w in range(W):
+                pq.put(OptionGetEstimateAlpha.Pixel(transmission_array[h][w], h, w))
+        while point_one_number > 0:
+            point_one_number -= 1
+            pixel = pq.get()
+            maximum_intensity = max(((haze_arr[pixel.h][pixel.w][0] + haze_arr[pixel.h][pixel.w][1] + haze_arr[pixel.h][pixel.w][2]) / 3), maximum_intensity)
+        print("GT: " + str(alpha) + " Estimate Alpha: " + str(maximum_intensity))
+
+    def draw_mat_plot(self):
+        pass
 
 
 # task[0]: Transmission array
@@ -325,7 +380,9 @@ def main():
     for t in thread_list:
         t.join()
 
-    OptionFactory.get_matplotlib_instance(OPTION).draw_mat_plot()
+    plot_instance = OptionFactory.get_matplotlib_instance(OPTION)
+    if plot_instance  is not None:
+        plot_instance.draw_mat_plot()
 
 
 if __name__ == '__main__':
