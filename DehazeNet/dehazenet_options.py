@@ -263,27 +263,57 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
         def __lt__(self, other):
             return self.transmission < other.transmission
 
+    class ChannelDistance(object):
+        def __init__(self, distance, h, w):
+            self.distance = distance
+            self.h = h
+            self.w = w
+
+        def __lt__(self, other):
+            return self.distance < self.distance
+
     def do_option(self, transmission_array, transmission_name, result_queue):
         if OPTION != Options.GET_ESTIMATE_ALPHA:
             return
         _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
         haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
+        # dark_channel_map = OptionGetEstimateAlpha.__option_get_dark_channel_map(haze_arr)
+        OptionGetEstimateAlpha.__estimate_alpha_with_map(transmission_array, haze_arr, alpha)
+
+    def draw_mat_plot(self):
+        pass
+
+    @staticmethod
+    def __estimate_alpha_with_map(transmission, haze, alpha):
         pq = queue.PriorityQueue()
-        shape = np.shape(transmission_array)
+        shape = np.shape(transmission)
         H = shape[0]
         W = shape[1]
-        point_one_number = int(np.size(transmission_array) * 0.001)
+        point_one_number = int(np.size(transmission) * 0.001)
         maximum_intensity = 0
         for h in range(H):
             for w in range(W):
-                pq.put(OptionGetEstimateAlpha.Pixel(transmission_array[h][w], h, w))
+                pq.put(OptionGetEstimateAlpha.Pixel(transmission[h][w], h, w))
+        pq_for_minimum_distance = queue.PriorityQueue()
         while point_one_number > 0:
             point_one_number -= 1
             pixel = pq.get()
-            maximum_intensity = max(((haze_arr[pixel.h][pixel.w][0] + haze_arr[pixel.h][pixel.w][1] + haze_arr[pixel.h][pixel.w][2]) / 3), maximum_intensity)
-        print("GT: " + str(alpha) + " Estimate Alpha: " + str(maximum_intensity))
+            # maximum_intensity = max(
+            #     ((haze[pixel.h][pixel.w][0] + haze[pixel.h][pixel.w][1] + haze[pixel.h][pixel.w][2]) / 3),
+            #     maximum_intensity)
+            # print("(" + str(round(haze[pixel.h][pixel.w][0], 3)) + "  " + str(round(haze[pixel.h][pixel.w][1], 3)) + "  " + str(
+            #     round(haze[pixel.h][pixel.w][2], 3)) + ")")
+            distance = (haze[pixel.h][pixel.w][0] - haze[pixel.h][pixel.w][1]) ** 2 + \
+                       (haze[pixel.h][pixel.w][1] - haze[pixel.h][pixel.w][2]) ** 2 + \
+                       (haze[pixel.h][pixel.w][0] - haze[pixel.h][pixel.w][2]) ** 2
+            pq_for_minimum_distance.put(OptionGetEstimateAlpha.ChannelDistance(distance, pixel.h, pixel.w))
+        solution_pixel = pq_for_minimum_distance.get()
+        estimate_alpha = (haze[solution_pixel.h][solution_pixel.w][0] + haze[solution_pixel.h][solution_pixel.w][1] +
+                          haze[solution_pixel.h][solution_pixel.w][2]) / 3
+        print("GT: " + str(alpha) + " Estimate Alpha: " + str(round(estimate_alpha, 3)))
 
-    def draw_mat_plot(self):
+    @staticmethod
+    def __option_get_dark_channel_map(haze_arr):
         pass
 
 
