@@ -9,10 +9,11 @@ import dehazenet_transmission as dt
 import WRLock
 import time
 import matplotlib.pyplot as plt
-import dehazenet_transmission as dtrans
+import shutil
 
 TRANS_DIR = "./ClearImages/TransImages"
 HAZY_DIR = "./HazeImages/TestImages"
+STATISTICAL_DIR = "./StatisticalFigure"
 START_CONDITION = threading.Condition()
 RESULT_QUEUE = queue.Queue()
 THRESHOLD = 0.01
@@ -72,13 +73,15 @@ class OptionsConsumer(threading.Thread):
                 option_do_count_close_zero(task[0], task[1], RESULT_QUEUE)
 
                 # TODO: Calculate three channels value difference and get statistical calculation for all channels
-                # option_get_three_channel_value_close(task[0], task[1], RESULT_QUEUE)
+                # TODO: Put result into a queue and use matplotlib to generate the historgram
+                option_get_three_channel_value_close(task[0], task[1], RESULT_QUEUE)
 
                 # TODO: (Optional) Dehaze hazy images using transmission map
                 # result = option_dehaze_using_transmission_map(task[0], task[1])
                 # do.opt_write_result_to_file(result)
 
-                # TODO: Check if the t restriction is satisfied, if the three channel values are close enough
+                # TODO: Check if the t restriction is satisfied, check how many pixels match
+                # TODO: the three channel values are close enough
                 # option_check_distances_with_small_transmission(task[0], task[1])
         print('Consumer finish')
 
@@ -109,12 +112,12 @@ def option_get_three_channel_value_close(transmission_array, transmission_array_
     expected_number = 0
     for h in range(H):
         for w in range(W):
-            if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) < THRESHOLD and \
-                    abs(haze_arr[h][w][1] - haze_arr[h][w][2]) < THRESHOLD and abs(haze_arr[h][w][0] - haze_arr[h][w][2]) < THRESHOLD\
-                    and haze_arr[h][w][1] >= 0 and haze_arr[h][w][0] > LOWER_BOUNDARY:
-                pq.put((haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3)
-                if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
-                    expected_number += 1
+            if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) <= THRESHOLD or abs(
+                    haze_arr[h][w][1] - haze_arr[h][w][2]) <= THRESHOLD or abs(haze_arr[h][w][0] - haze_arr[h][w][2]) <= THRESHOLD or haze_arr[h][w][1] >= 0:
+                if haze_arr[h][w][0] >= LOWER_BOUNDARY:
+                    pq.put((haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3)
+                    if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
+                        expected_number += 1
     result_queue.put((alpha, pq, expected_number, transmission_array_name))
 
 
@@ -145,8 +148,8 @@ def option_do_count_close_zero(transmission_array, transmission_array_name, resu
     for h in range(H):
         for w in range(W):
             if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
-                single_result = (haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3
-                print("(" + str(round(haze_arr[h][w][0], 3)) + "  " + str(round(haze_arr[h][w][1], 3)) + "  " + str(round(haze_arr[h][w][2], 3)) + ")")
+                # single_result = (haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3
+                # print("(" + str(round(haze_arr[h][w][0], 3)) + "  " + str(round(haze_arr[h][w][1], 3)) + "  " + str(round(haze_arr[h][w][2], 3)) + ")")
                 count += 1
     print("Total size: " + str(size) + " Close Zero: " + str(count))
 
@@ -161,6 +164,9 @@ def option_input(t_dir):
 
 
 def main():
+    if os.path.exists(STATISTICAL_DIR):
+        shutil.rmtree(STATISTICAL_DIR)
+        os.mkdir(STATISTICAL_DIR)
     q = option_input(TRANS_DIR)
     cpu_num = multiprocessing.cpu_count()
     task_queue = queue.Queue()
@@ -182,8 +188,8 @@ def main():
     while not RESULT_QUEUE.empty():
         s_queue = RESULT_QUEUE.get()
         alpha_gt = s_queue[0]
+        plt.xlim(LOWER_BOUNDARY, 1)
         plt.xlabel('Hazy pixel value')
-        # plt.xlim((0.7, 1))
         my_x_ticks = np.arange(LOWER_BOUNDARY, 1, STEP_SIZE)
         plt.xticks(my_x_ticks)
         plt.ylabel('Number of points in this region')
@@ -192,16 +198,17 @@ def main():
         bar_list = []
         while not s_queue[1].empty():
             # single_result += ' ' + str(round(s_queue[1].get(), 3))
-            bar_list.append(s_queue[1].get())
+            bar_list.append(round(s_queue[1].get(), 3))
         result_array = np.asarray(bar_list)
         size = np.size(result_array)
         plt.title("gt: " + str(alpha_gt) + "|threshold: " + str(THRESHOLD) + "|TransmissionThreshold: " +
                   str(TRANSMISSION_THRESHOLD) + "|fraction: " + str(s_queue[2]) + "/" + str(size))
-        plt.hist(result_array, bins=30, normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
+        plt.hist(result_array, bins=30, width=0.01,  normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
         _, filename = os.path.split(s_queue[3])
         fname, _ = os.path.splitext(filename)
         fname_with_ext = fname + ".png"
         plt.savefig(os.path.join("./StatisticalFigure", fname_with_ext))
+        plt.close()
 
 
 if __name__ == '__main__':

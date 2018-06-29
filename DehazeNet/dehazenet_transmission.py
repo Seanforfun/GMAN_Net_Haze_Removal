@@ -115,9 +115,10 @@ def trans_get_transmission_map(task):
     shape = np.shape(clear_array)
     alpha_matrix = np.ones((shape[0], shape[1])) * task.a
     t = (hazy_array[:,:,0] - alpha_matrix) / (clear_array[:,:,0] - alpha_matrix)
-    where_are_nan = np.isnan(t)
-    t[where_are_nan] = 0
-    return np.clip(t, 0, 1) # Change negative number to zero, Change numbers over 1 to 1
+    return t
+    # where_are_nan = np.isnan(t)
+    # t[where_are_nan] = 0
+    # return np.clip(t, 0, 1) # Change negative number to zero, Change numbers over 1 to 1
 
 
 def trans_input(clear_dir, hazy_dir):
