@@ -112,13 +112,32 @@ class TransConsumer(threading.Thread):
 def trans_get_transmission_map(task):
     clear_array = task.clear_image_array
     hazy_array = task.hazy_image_array
+    alpha = task.a
     shape = np.shape(clear_array)
-    alpha_matrix = np.ones((shape[0], shape[1])) * task.a
-    t = (hazy_array[:,:,0] - alpha_matrix) / (clear_array[:,:,0] - alpha_matrix)
-    return t
-    # where_are_nan = np.isnan(t)
-    # t[where_are_nan] = 0
-    # return np.clip(t, 0, 1) # Change negative number to zero, Change numbers over 1 to 1
+    H = shape[0]
+    W = shape[1]
+    alpha_matrix = np.ones((shape[0], shape[1])) * alpha
+    selected_haze_matrix = np.zeros((H, W))
+    selected_clear_matrix = np.zeros((H, W))
+    for h in range(H):
+        for w in range(W):
+            pixel = [abs(hazy_array[h][w][0] - alpha), abs(hazy_array[h][w][1] - alpha), abs(hazy_array[h][w][2] - alpha)]
+            index = pixel.index(max(pixel))
+            selected_haze_matrix[h][w] = hazy_array[h][w][index]
+            selected_clear_matrix[h][w] = clear_array[h][w][index]
+    # haze_avg = (hazy_array[:,:,0] + hazy_array[:,:,1] + hazy_array[:,:,2]) / 3
+    # clear_avg = (clear_array[:,:,0] + clear_array[:,:,1] + clear_array[:,:,2]) / 3
+    # TODO Get transmission map as t
+    # t = (haze_avg[:,:] - alpha_matrix) / (clear_avg[:,:] - alpha_matrix)
+    # t = (haze_avg[:,:,0] - alpha_matrix) / (clear_array[:,:,0] - alpha_matrix)
+    # TODO Get transmission map as 1/t
+    # tinv = (clear_avg[:,:] - alpha_matrix) / (haze_avg[:,:] - alpha_matrix)
+    # t = tinv
+    # TODO Get transmission taking into consideration of alpha
+    t = (selected_haze_matrix[:, :] - alpha_matrix) / (selected_clear_matrix[:, :] - alpha_matrix)
+    where_are_nan = np.isnan(t)
+    t[where_are_nan] = 0
+    return np.clip(t, 0.0000001, 1)  # Change negative number to zero, Change numbers over 1 to 1
 
 
 def trans_input(clear_dir, hazy_dir):

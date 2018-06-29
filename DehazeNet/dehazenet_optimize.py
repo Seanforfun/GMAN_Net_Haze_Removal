@@ -102,6 +102,9 @@ def opt_find_best_alpha(result, haze, alpha):
 def opt_dehaze_with_alpha_transmission(alpha, transmission, haze):
     shape = np.shape(haze)
     alpha_matrix = np.ones((shape[0], shape[1])) * float(alpha)
+    # TODO Dehaze with 1/t
+    # for i in range(3):
+    #     haze[:, :, i] = transmission * haze[:, :, i] - np.ones((shape[0], shape[1])) * transmission + np.ones((shape[0], shape[1]))
     # TODO Dehaze for RGB channels
     for i in range(3):
         haze[:, :, i] = (haze[:, :, i] - alpha_matrix * (np.ones((shape[0], shape[1])) - transmission)) \
@@ -113,7 +116,7 @@ def opt_dehaze_with_alpha_transmission(alpha, transmission, haze):
     result_arr = haze
     where_are_inf = np.isinf(result_arr)
     result_arr[where_are_inf] = 1
-    return result_arr
+    return np.clip(result_arr, 0, 1)
 
 
 def opt_write_result_to_file(result):

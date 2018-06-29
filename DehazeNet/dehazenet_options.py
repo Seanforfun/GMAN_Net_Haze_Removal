@@ -10,16 +10,226 @@ import WRLock
 import time
 import matplotlib.pyplot as plt
 import shutil
+from enum import Enum
+from abc import ABCMeta,abstractmethod
 
 TRANS_DIR = "./ClearImages/TransImages"
 HAZY_DIR = "./HazeImages/TestImages"
 STATISTICAL_DIR = "./StatisticalFigure"
 START_CONDITION = threading.Condition()
 RESULT_QUEUE = queue.Queue()
-THRESHOLD = 0.01
+THRESHOLD = 0.005
 LOWER_BOUNDARY = 0.7
 STEP_SIZE = 0.01
-TRANSMISSION_THRESHOLD = 0.01
+TRANSMISSION_THRESHOLD = 0.001
+
+
+class Options(Enum):
+    GET_CLOSE_ZERO_TRANSMISSION_STATISTICS = 0
+    GET_HISTOGRAM_WITH_CLOSE_RGB = 1
+    GET_TRANSMISSION_HISTOGRAM = 2
+    DEHAZE_WITH_TRANSMISSION_MAP = 3
+    GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION = 4
+
+
+# TODO Modify options here
+OPTION = Options.GET_TRANSMISSION_HISTOGRAM
+
+
+class OptionFactory:
+    @staticmethod
+    def get_option_instance(option):
+        if option == Options.GET_CLOSE_ZERO_TRANSMISSION_STATISTICS:
+            return OptionDoCountCloseZero()
+        elif option == Options.GET_HISTOGRAM_WITH_CLOSE_RGB:
+            return OptionGetThreeChannelValueClose()
+        elif option == Options.GET_TRANSMISSION_HISTOGRAM:
+            return OptionGetTransmissionHistogram()
+        elif option == Options.DEHAZE_WITH_TRANSMISSION_MAP:
+            return OptionDehazeUsingTransmissionMap()
+        elif option == Options.GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION:
+            return OptionCheckDistancesWithSmallTransmission()
+        else:
+            raise NotImplementedError("Method is not implemented!")
+
+    @staticmethod
+    def get_matplotlib_instance(option):
+        if option == Options.GET_CLOSE_ZERO_TRANSMISSION_STATISTICS:
+            pass
+        elif option == Options.GET_HISTOGRAM_WITH_CLOSE_RGB:
+            return OptionGetThreeChannelValueClose()
+        elif option == Options.GET_TRANSMISSION_HISTOGRAM:
+            return OptionGetTransmissionHistogram()
+        elif option == Options.DEHAZE_WITH_TRANSMISSION_MAP:
+            pass
+        elif option == Options.GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION:
+            pass
+        else:
+            raise NotImplementedError("Method is not implemented!")
+
+
+class IOption(object):
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def do_option(self, transmission_array, tranmission_name, result_queue):
+        pass
+
+
+class IOptionPlot(object):
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def draw_mat_plot(self):
+        pass
+
+
+class OptionDoCountCloseZero(IOption):
+    # Get the number of transmissions under transmission threshold
+    def do_option(self, transmission_array, transmission_array_name, result_queue):
+        if OPTION != Options.GET_CLOSE_ZERO_TRANSMISSION_STATISTICS:
+            return
+        haze_arr = option_get_haze_array_with_transmission_name(transmission_array_name)
+        pq = queue.Queue()
+        shape = np.shape(transmission_array)
+        H = shape[0]
+        W = shape[1]
+        size = H * W
+        count = 0
+        for h in range(H):
+            for w in range(W):
+                if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
+                    # single_result = (haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3
+                    print("(" + str(round(haze_arr[h][w][0], 3)) + "  " + str(round(haze_arr[h][w][1], 3)) + "  " + str(
+                        round(haze_arr[h][w][2], 3)) + ")")
+                    count += 1
+        print("Total size: " + str(size) + " Close Zero: " + str(count))
+
+
+# Calculate three channels value difference and get statistical calculation for all channels
+# Put result into a queue and use matplotlib to generate the historgram
+class OptionGetThreeChannelValueClose(IOption, IOptionPlot):
+    def do_option(self, transmission_array, transmission_array_name, result_queue):
+        if OPTION != Options.GET_HISTOGRAM_WITH_CLOSE_RGB:
+            return
+        haze_arr = option_get_haze_array_with_transmission_name(transmission_array_name)
+        _, alpha, _ = dt.trans_get_alpha_beta(transmission_array_name)
+        pq = queue.PriorityQueue()
+        shape = np.shape(haze_arr)
+        H = shape[0]
+        W = shape[1]
+        expected_number = 0
+        for h in range(H):
+            for w in range(W):
+                if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) <= THRESHOLD and abs(
+                        haze_arr[h][w][1] - haze_arr[h][w][2]) <= THRESHOLD and abs(
+                    haze_arr[h][w][0] - haze_arr[h][w][2]) \
+                        <= THRESHOLD:
+                    if haze_arr[h][w][0] >= LOWER_BOUNDARY:
+                        # pq.put((haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3)
+                        pq.put(haze_arr[h][w][0])
+                        if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
+                            expected_number += 1
+        result_queue.put((alpha, pq, expected_number, transmission_array_name))
+
+    def draw_mat_plot(self):
+        if OPTION != Options.GET_HISTOGRAM_WITH_CLOSE_RGB:
+            return
+        while not RESULT_QUEUE.empty():
+            s_queue = RESULT_QUEUE.get()
+            alpha_gt = s_queue[0]
+            plt.xlim(LOWER_BOUNDARY, 1)
+            plt.xlabel('Hazy pixel value')
+            my_x_ticks = np.arange(LOWER_BOUNDARY, 1, STEP_SIZE)
+            plt.xticks(my_x_ticks)
+            plt.ylabel('Number of points in this region')
+            bar_list = []
+            while not s_queue[1].empty():
+                bar_list.append(round(s_queue[1].get(), 3))
+            result_array = np.asarray(bar_list)
+            size = np.size(result_array)
+            plt.title("gt: " + str(alpha_gt) + "|threshold: " + str(THRESHOLD) + "|TransmissionThreshold: " +
+                      str(TRANSMISSION_THRESHOLD) + "|fraction: " + str(s_queue[2]) + "/" + str(size))
+            plt.hist(result_array, bins=30, width=0.006, normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
+            _, filename = os.path.split(s_queue[3])
+            fname, _ = os.path.splitext(filename)
+            fname_with_ext = fname + ".png"
+            plt.savefig(os.path.join("./StatisticalFigure", fname_with_ext))
+            plt.close()
+
+
+class OptionGetTransmissionHistogram(IOption, IOptionPlot):
+    # Get histogram of transmission map
+    def do_option(self, transmission_array, transmission_array_name, result_queue):
+        if OPTION != Options.GET_TRANSMISSION_HISTOGRAM:
+            return
+        _, alpha, _ = dt.trans_get_alpha_beta(transmission_array_name)
+        shape = np.shape(transmission_array)
+        H = shape[0]
+        W = shape[1]
+        expected_number = 0
+        pq = queue.PriorityQueue()
+        for h in range(H):
+            for w in range(W):
+                pq.put(transmission_array[h][w])
+                if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
+                    expected_number += 1
+        result_queue.put((alpha, pq, expected_number, transmission_array_name))
+
+    def draw_mat_plot(self):
+        if OPTION != Options.GET_TRANSMISSION_HISTOGRAM:
+            return
+        while not RESULT_QUEUE.empty():
+            s_queue = RESULT_QUEUE.get()
+            alpha_gt = s_queue[0]
+            plt.xlim(0, 1)
+            plt.xlabel('Hazy pixel value')
+            my_x_ticks = np.arange(0, 1, STEP_SIZE)
+            plt.xticks(my_x_ticks)
+            plt.ylabel('Number of points in this region')
+            bar_list = []
+            while not s_queue[1].empty():
+                bar_list.append(round(s_queue[1].get(), 3))
+            result_array = np.asarray(bar_list)
+            size = np.size(result_array)
+            plt.title("gt: " + str(alpha_gt) + "|threshold: " + str(THRESHOLD) + "|TransmissionThreshold: " +
+                      str(TRANSMISSION_THRESHOLD) + "|fraction: " + str(s_queue[2]) + "/" + str(size))
+            plt.hist(result_array, bins=30, width=0.005, normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
+            _, filename = os.path.split(s_queue[3])
+            fname, _ = os.path.splitext(filename)
+            fname_with_ext = fname + ".png"
+            plt.savefig(os.path.join("./StatisticalFigure", fname_with_ext))
+            plt.close()
+
+class OptionDehazeUsingTransmissionMap(IOption):
+    # Dehaze hazy images using transmission map
+    def do_option(self, transmission_array, transmission_name, result_queue):
+        if OPTION != Options.DEHAZE_WITH_TRANSMISSION_MAP:
+            return
+        haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
+        # Get alpha from name
+        _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
+        do.opt_write_result_to_file(do.opt_dehaze_with_alpha_transmission(alpha, transmission_array, haze_arr))
+
+
+class OptionCheckDistancesWithSmallTransmission(IOption):
+    # Check if the t restriction is satisfied, and check how many pixels match the three channel values are close enough
+    def do_option(self, transmission_array, transmission_name, result_queue):
+        if OPTION != Options.GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION:
+            return
+        haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
+        shape = np.shape(transmission_array)
+        H = shape[0]
+        W = shape[1]
+        number_counter = 0
+        for h in range(H):
+            for w in range(W):
+                if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
+                    if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) < THRESHOLD and \
+                            abs(haze_arr[h][w][1] - haze_arr[h][w][2]) < THRESHOLD and \
+                            abs(haze_arr[h][w][0] - haze_arr[h][w][2]) < THRESHOLD:
+                        number_counter += 1
+        print(number_counter)
 
 
 # task[0]: Transmission array
@@ -70,55 +280,9 @@ class OptionsConsumer(threading.Thread):
                 self.lock.release()
                 self.task_queue.put(None)
             else:
-                option_do_count_close_zero(task[0], task[1], RESULT_QUEUE)
-
-                # TODO: Calculate three channels value difference and get statistical calculation for all channels
-                # TODO: Put result into a queue and use matplotlib to generate the historgram
-                option_get_three_channel_value_close(task[0], task[1], RESULT_QUEUE)
-
-                # TODO: (Optional) Dehaze hazy images using transmission map
-                # result = option_dehaze_using_transmission_map(task[0], task[1])
-                # do.opt_write_result_to_file(result)
-
-                # TODO: Check if the t restriction is satisfied, check how many pixels match
-                # TODO: the three channel values are close enough
-                # option_check_distances_with_small_transmission(task[0], task[1])
+                option_operator = OptionFactory.get_option_instance(OPTION)
+                option_operator.do_option(task[0], task[1], RESULT_QUEUE)
         print('Consumer finish')
-
-
-def option_check_distances_with_small_transmission(transmission, transmission_name):
-    haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
-    shape = np.shape(transmission)
-    H = shape[0]
-    W = shape[1]
-    number_counter = 0
-    for h in range(H):
-        for w in range(W):
-            if transmission[h][w] < TRANSMISSION_THRESHOLD:
-                if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) < THRESHOLD and \
-                        abs(haze_arr[h][w][1] - haze_arr[h][w][2]) < THRESHOLD and\
-                        abs(haze_arr[h][w][0] - haze_arr[h][w][2]) < THRESHOLD:
-                    number_counter += 1
-    print(number_counter)
-
-
-def option_get_three_channel_value_close(transmission_array, transmission_array_name, result_queue):
-    haze_arr = option_get_haze_array_with_transmission_name(transmission_array_name)
-    _, alpha, _ = dt.trans_get_alpha_beta(transmission_array_name)
-    pq = queue.PriorityQueue()
-    shape = np.shape(haze_arr)
-    H = shape[0]
-    W = shape[1]
-    expected_number = 0
-    for h in range(H):
-        for w in range(W):
-            if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) <= THRESHOLD or abs(
-                    haze_arr[h][w][1] - haze_arr[h][w][2]) <= THRESHOLD or abs(haze_arr[h][w][0] - haze_arr[h][w][2]) <= THRESHOLD or haze_arr[h][w][1] >= 0:
-                if haze_arr[h][w][0] >= LOWER_BOUNDARY:
-                    pq.put((haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3)
-                    if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
-                        expected_number += 1
-    result_queue.put((alpha, pq, expected_number, transmission_array_name))
 
 
 # Get normalize haze array
@@ -128,30 +292,6 @@ def option_get_haze_array_with_transmission_name(name):
     fname_with_ext = fname + ".jpg"
     full_name = os.path.join(HAZY_DIR, fname_with_ext)
     return np.array(Image.open(full_name)) / 255
-
-
-def option_dehaze_using_transmission_map(transmission, transmission_name):
-    haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
-    # Get alpha from name
-    _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
-    return do.opt_dehaze_with_alpha_transmission(alpha, transmission, haze_arr)
-
-
-def option_do_count_close_zero(transmission_array, transmission_array_name, result_queue):
-    haze_arr = option_get_haze_array_with_transmission_name(transmission_array_name)
-    pq = queue.Queue()
-    shape = np.shape(transmission_array)
-    H = shape[0]
-    W = shape[1]
-    size = H * W
-    count = 0
-    for h in range(H):
-        for w in range(W):
-            if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
-                # single_result = (haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3
-                # print("(" + str(round(haze_arr[h][w][0], 3)) + "  " + str(round(haze_arr[h][w][1], 3)) + "  " + str(round(haze_arr[h][w][2], 3)) + ")")
-                count += 1
-    print("Total size: " + str(size) + " Close Zero: " + str(count))
 
 
 def option_input(t_dir):
@@ -185,30 +325,7 @@ def main():
     for t in thread_list:
         t.join()
 
-    while not RESULT_QUEUE.empty():
-        s_queue = RESULT_QUEUE.get()
-        alpha_gt = s_queue[0]
-        plt.xlim(LOWER_BOUNDARY, 1)
-        plt.xlabel('Hazy pixel value')
-        my_x_ticks = np.arange(LOWER_BOUNDARY, 1, STEP_SIZE)
-        plt.xticks(my_x_ticks)
-        plt.ylabel('Number of points in this region')
-        # single_result = "gt: " + str(alpha_gt) + "| values:"
-        # bar list saves all point numbers in all regions
-        bar_list = []
-        while not s_queue[1].empty():
-            # single_result += ' ' + str(round(s_queue[1].get(), 3))
-            bar_list.append(round(s_queue[1].get(), 3))
-        result_array = np.asarray(bar_list)
-        size = np.size(result_array)
-        plt.title("gt: " + str(alpha_gt) + "|threshold: " + str(THRESHOLD) + "|TransmissionThreshold: " +
-                  str(TRANSMISSION_THRESHOLD) + "|fraction: " + str(s_queue[2]) + "/" + str(size))
-        plt.hist(result_array, bins=30, width=0.01,  normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
-        _, filename = os.path.split(s_queue[3])
-        fname, _ = os.path.splitext(filename)
-        fname_with_ext = fname + ".png"
-        plt.savefig(os.path.join("./StatisticalFigure", fname_with_ext))
-        plt.close()
+    OptionFactory.get_matplotlib_instance(OPTION).draw_mat_plot()
 
 
 if __name__ == '__main__':
