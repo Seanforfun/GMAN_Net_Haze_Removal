@@ -17,7 +17,7 @@ import shutil
 from enum import Enum
 from abc import ABCMeta,abstractmethod
 import dehazenet_darkchannel as dd
-
+from ColorAttenuationPriorDehazing import runDehazing
 
 TRANS_DIR = "./ClearImages/TransImages"
 HAZY_DIR = "./HazeImages/TestImages"
@@ -279,7 +279,8 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
         _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
         haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
         # dark_channel_map = OptionGetEstimateAlpha.__option_get_dark_channel_map(haze_arr)
-        OptionGetEstimateAlpha.__estimate_alpha_with_map(transmission_array, haze_arr, alpha, result_queue)
+        attenuation_depth_map = OptionGetEstimateAlpha.__option_get_depth_color_attenuation(haze_arr)
+        OptionGetEstimateAlpha.__estimate_alpha_with_map(attenuation_depth_map, haze_arr, alpha, result_queue)
 
     def print_visual_result(self):
         if OPTION != Options.GET_ESTIMATE_ALPHA:
@@ -315,11 +316,10 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
         solution_pixel = pq_for_minimum_distance.get()
         # estimate_alpha = (haze[solution_pixel.h][solution_pixel.w][0] + haze[solution_pixel.h][solution_pixel.w][1] +
         #                   haze[solution_pixel.h][solution_pixel.w][2]) / 3
-        estimate_alpha = max(haze[solution_pixel.h][solution_pixel.w][0],  haze[solution_pixel.h][solution_pixel.w][1],  haze[solution_pixel.h][solution_pixel.w][2])
+        estimate_alpha = max(haze[solution_pixel.h][solution_pixel.w][0],  haze[solution_pixel.h][solution_pixel.w][1], haze[solution_pixel.h][solution_pixel.w][2])
         printed_estimate_alpha = abs(estimate_alpha - float(alpha)) / float(alpha)
-        # print("GT: " + str(alpha) + " Estimate Alpha: " + str(round(estimate_alpha, 3)) + " Error rate: " +
-        #       str(printed_estimate_alpha) + "%")
-        print("GT: %f Estimate Alpha: %.5f Error rate: " % (float(alpha), estimate_alpha) + '{:.3%}'.format(printed_estimate_alpha))
+        print("GT: %f Estimate Alpha: %.5f Error rate: " % (float(alpha), estimate_alpha) + '{:.3%}'.format(
+            printed_estimate_alpha))
         result_queue.put(printed_estimate_alpha)
 
     @staticmethod
@@ -330,6 +330,14 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
         alpha = dd.AtmLight(u64_haze_arr, dark)
         te = dd.TransmissionEstimate(u64_haze_arr, alpha, 15)
         return dd.TransmissionRefine(u8_haze_arr, te)
+
+    @staticmethod
+    def __option_get_depth_color_attenuation(haze_arr):
+        dR, _ = runDehazing.calDepthMap((haze_arr * 255).astype('uint8'), 15)
+        guided_filter = runDehazing.GuidedFilter(haze_arr, 60, 10 ** -3)
+        refineDR = guided_filter.filter(dR)
+        tR = np.exp(-1.0 * refineDR)
+        return tR
 
 
 # task[0]: Transmission array

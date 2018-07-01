@@ -177,7 +177,7 @@ def cal_psnr(im1, im2):
 
 
 def eval_once(saver, train_op, hazed_images, clear_images, hazed_images_obj_list, index, placeholder, psnr_list, ssim_list, heights, widths):
-    with  tf.Session(config=tf.ConfigProto(
+    with tf.Session(config=tf.ConfigProto(
             allow_soft_placement=True,
             log_device_placement=df.FLAGS.log_device_placement)) as sess:
         ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
@@ -385,13 +385,9 @@ def evaluate():
                 float_clear_image = clear_image_arr.astype('float32') / 255
                 clear_image_list.append(float_clear_image)
 
-
         if not df.FLAGS.eval_only_haze:
             if len(clear_image_list) != len(hazed_image_list):
                 raise RuntimeError("hazed images cannot correspond to clear images!")
-        print("==================================================================")
-        print(len(hazed_image_list))
-        print("==================================================================")
         for index in range(len(hazed_image_list)):
             # logist = dmgt.inference(hazed_image)
             logist = lz_net_eval(hazed_image_placeholder_list[index], height_list[index], width_list[index])
@@ -407,10 +403,10 @@ def evaluate():
 
         if not df.FLAGS.eval_only_haze:
             psnr_avg = cal_average(psnr_list)
-            format_str = ('%s: Average PSNR: %5f')
+            format_str = '%s: Average PSNR: %5f'
             print(format_str % (datetime.now(), psnr_avg))
             ssim_avg = cal_average(ssim_list)
-            format_str = ('%s: Average SSIM: %5f')
+            format_str = '%s: Average SSIM: %5f'
             print(format_str % (datetime.now(), ssim_avg))
 
 
