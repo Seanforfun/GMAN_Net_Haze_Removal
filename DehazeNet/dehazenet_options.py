@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import shutil
 from enum import Enum
 from abc import ABCMeta,abstractmethod
+import dehazenet_darkchannel as dd
 
 
 TRANS_DIR = "./ClearImages/TransImages"
@@ -63,17 +64,17 @@ class OptionFactory:
     @staticmethod
     def get_matplotlib_instance(option):
         if option == Options.GET_CLOSE_ZERO_TRANSMISSION_STATISTICS:
-            pass
+            return OptionDoCountCloseZero()
         elif option == Options.GET_HISTOGRAM_WITH_CLOSE_RGB:
             return OptionGetThreeChannelValueClose()
         elif option == Options.GET_TRANSMISSION_HISTOGRAM:
             return OptionGetTransmissionHistogram()
         elif option == Options.DEHAZE_WITH_TRANSMISSION_MAP:
-            pass
+            return OptionDehazeUsingTransmissionMap()
         elif option == Options.GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION:
-            pass
+            return OptionCheckDistancesWithSmallTransmission()
         elif option == Options.GET_ESTIMATE_ALPHA:
-            pass
+            return OptionGetEstimateAlpha()
         else:
             raise NotImplementedError("Method is not implemented!")
 
@@ -90,7 +91,7 @@ class IOptionPlot(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def draw_mat_plot(self):
+    def print_visual_result(self):
         pass
 
 
@@ -115,7 +116,7 @@ class OptionDoCountCloseZero(IOption, IOptionPlot):
                     count += 1
         print("Total size: " + str(size) + " Close Zero: " + str(count))
 
-    def draw_mat_plot(self):
+    def print_visual_result(self):
         pass
 
 
@@ -145,7 +146,7 @@ class OptionGetThreeChannelValueClose(IOption, IOptionPlot):
                             expected_number += 1
         result_queue.put((alpha, pq, expected_number, transmission_array_name))
 
-    def draw_mat_plot(self):
+    def print_visual_result(self):
         if OPTION != Options.GET_HISTOGRAM_WITH_CLOSE_RGB:
             return
         while not RESULT_QUEUE.empty():
@@ -189,7 +190,7 @@ class OptionGetTransmissionHistogram(IOption, IOptionPlot):
                     expected_number += 1
         result_queue.put((alpha, pq, expected_number, transmission_array_name))
 
-    def draw_mat_plot(self):
+    def print_visual_result(self):
         if OPTION != Options.GET_TRANSMISSION_HISTOGRAM:
             return
         while not RESULT_QUEUE.empty():
@@ -225,7 +226,7 @@ class OptionDehazeUsingTransmissionMap(IOption, IOptionPlot):
         _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
         do.opt_write_result_to_file(do.opt_dehaze_with_alpha_transmission(alpha, transmission_array, haze_arr))
 
-    def draw_mat_plot(self):
+    def print_visual_result(self):
         pass
 
 
@@ -248,7 +249,7 @@ class OptionCheckDistancesWithSmallTransmission(IOption, IOptionPlot):
                         number_counter += 1
         print(number_counter)
 
-    def draw_mat_plot(self):
+    def print_visual_result(self):
         pass
 
 
@@ -278,13 +279,19 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
         _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
         haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
         # dark_channel_map = OptionGetEstimateAlpha.__option_get_dark_channel_map(haze_arr)
-        OptionGetEstimateAlpha.__estimate_alpha_with_map(transmission_array, haze_arr, alpha)
+        OptionGetEstimateAlpha.__estimate_alpha_with_map(transmission_array, haze_arr, alpha, result_queue)
 
-    def draw_mat_plot(self):
-        pass
+    def print_visual_result(self):
+        if OPTION != Options.GET_ESTIMATE_ALPHA:
+            return
+        sum_error_rate = 0
+        size = RESULT_QUEUE.qsize()
+        while not RESULT_QUEUE.empty():
+            sum_error_rate += RESULT_QUEUE.get()
+        print(" Error rate: " + str(round(sum_error_rate / size, 5)) + "%")
 
     @staticmethod
-    def __estimate_alpha_with_map(transmission, haze, alpha):
+    def __estimate_alpha_with_map(transmission, haze, alpha, result_queue):
         pq = queue.PriorityQueue()
         shape = np.shape(transmission)
         H = shape[0]
@@ -301,20 +308,28 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
             # maximum_intensity = max(
             #     ((haze[pixel.h][pixel.w][0] + haze[pixel.h][pixel.w][1] + haze[pixel.h][pixel.w][2]) / 3),
             #     maximum_intensity)
-            # print("(" + str(round(haze[pixel.h][pixel.w][0], 3)) + "  " + str(round(haze[pixel.h][pixel.w][1], 3)) + "  " + str(
-            #     round(haze[pixel.h][pixel.w][2], 3)) + ")")
             distance = (haze[pixel.h][pixel.w][0] - haze[pixel.h][pixel.w][1]) ** 2 + \
                        (haze[pixel.h][pixel.w][1] - haze[pixel.h][pixel.w][2]) ** 2 + \
                        (haze[pixel.h][pixel.w][0] - haze[pixel.h][pixel.w][2]) ** 2
             pq_for_minimum_distance.put(OptionGetEstimateAlpha.ChannelDistance(distance, pixel.h, pixel.w))
         solution_pixel = pq_for_minimum_distance.get()
-        estimate_alpha = (haze[solution_pixel.h][solution_pixel.w][0] + haze[solution_pixel.h][solution_pixel.w][1] +
-                          haze[solution_pixel.h][solution_pixel.w][2]) / 3
-        print("GT: " + str(alpha) + " Estimate Alpha: " + str(round(estimate_alpha, 3)))
+        # estimate_alpha = (haze[solution_pixel.h][solution_pixel.w][0] + haze[solution_pixel.h][solution_pixel.w][1] +
+        #                   haze[solution_pixel.h][solution_pixel.w][2]) / 3
+        estimate_alpha = max(haze[solution_pixel.h][solution_pixel.w][0],  haze[solution_pixel.h][solution_pixel.w][1],  haze[solution_pixel.h][solution_pixel.w][2])
+        printed_estimate_alpha = abs(estimate_alpha - float(alpha)) / float(alpha)
+        # print("GT: " + str(alpha) + " Estimate Alpha: " + str(round(estimate_alpha, 3)) + " Error rate: " +
+        #       str(printed_estimate_alpha) + "%")
+        print("GT: %f Estimate Alpha: %.5f Error rate: " % (float(alpha), estimate_alpha) + '{:.3%}'.format(printed_estimate_alpha))
+        result_queue.put(printed_estimate_alpha)
 
     @staticmethod
     def __option_get_dark_channel_map(haze_arr):
-        pass
+        u8_haze_arr = haze_arr.astype("uint8")
+        u64_haze_arr = haze_arr.astype("float64")
+        dark = dd.DarkChannel(u64_haze_arr, 15)
+        alpha = dd.AtmLight(u64_haze_arr, dark)
+        te = dd.TransmissionEstimate(u64_haze_arr, alpha, 15)
+        return dd.TransmissionRefine(u8_haze_arr, te)
 
 
 # task[0]: Transmission array
@@ -332,7 +347,10 @@ class OptionsProducer(threading.Thread):
                 self.queue.put(None)
                 self.task_queue.put(None)
                 break
+            # TODO open transmission from .npy file
             arr = np.load(t)
+            # TODO open transmission from knight file
+            # arr = np.array(Image.open(t)) / 255
             self.task_queue.put((arr, t))
             # if START_CONDITION.acquire():
             #     START_CONDITION.notify_all()
@@ -411,8 +429,8 @@ def main():
         t.join()
 
     plot_instance = OptionFactory.get_matplotlib_instance(OPTION)
-    if plot_instance  is not None:
-        plot_instance.draw_mat_plot()
+    if plot_instance is not None:
+        plot_instance.print_visual_result()
 
 
 if __name__ == '__main__':
