@@ -41,6 +41,10 @@ def trans_read_image_array(image_path):
 
 
 def trans_get_alpha_beta(filename_with_extension):
+    '''
+    :param filename_with_extension:
+    :return: image_index, alpha, beta
+    '''
     filename, file_extension = os.path.splitext(filename_with_extension)
     filename_split = filename.split('_')
     return filename_split[IMAGE_INDEX], filename_split[IMAGE_A], filename_split[IMAGE_BETA]

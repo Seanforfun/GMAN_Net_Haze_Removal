@@ -28,7 +28,9 @@ THRESHOLD = 0.005
 LOWER_BOUNDARY = 0.7
 STEP_SIZE = 0.01
 TRANSMISSION_THRESHOLD = 0.001
-
+PNG_SUFFIX = '.png'
+JPG_SUFFIX = '.jpg'
+IMAGE_SUFFIX = PNG_SUFFIX
 
 class Options(Enum):
     GET_CLOSE_ZERO_TRANSMISSION_STATISTICS = 0
@@ -38,10 +40,12 @@ class Options(Enum):
     GET_PIXEL_NUMBER_CLOSE_FOR_LOW_TRANSMISSION = 4
     GET_ESTIMATE_ALPHA = 5
 
+
 class OptionsMap(Enum):
     TRANSMISSION_MAP = 0
     DARK_CHANNEL_MAP = 1
     ATTENUATION_DEPTH_MAP = 2
+
 
 # TODO When Options is GET_ESTIMATE_ALPHA, Select a map used to calculate the alpha
 MAP_OPTION = OptionsMap.ATTENUATION_DEPTH_MAP
@@ -174,7 +178,7 @@ class OptionGetThreeChannelValueClose(IOption, IOptionPlot):
             plt.hist(result_array, bins=30, width=0.006, normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
             _, filename = os.path.split(s_queue[3])
             fname, _ = os.path.splitext(filename)
-            fname_with_ext = fname + ".png"
+            fname_with_ext = fname + IMAGE_SUFFIX
             plt.savefig(os.path.join("./StatisticalFigure", fname_with_ext))
             plt.close()
 
@@ -322,7 +326,7 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
             return
         _, alpha, _ = dt.trans_get_alpha_beta(transmission_name)
         haze_arr = option_get_haze_array_with_transmission_name(transmission_name)
-        intermediate_map = OptionMapFactory(OptionsMap.DARK_CHANNEL_MAP).get_map(haze_arr)
+        intermediate_map = OptionMapFactory(MAP_OPTION).get_map(haze_arr)
         # attenuation_depth_map = OptionGetEstimateAlpha.__option_get_depth_color_attenuation(haze_arr)
         OptionGetEstimateAlpha.__estimate_alpha_with_map(intermediate_map, haze_arr, alpha, result_queue)
 
@@ -383,9 +387,9 @@ class OptionsProducer(threading.Thread):
                 self.task_queue.put(None)
                 break
             # TODO open transmission from .npy file
-            arr = np.load(t)
+            # arr = np.load(t)
             # TODO open transmission from knight file
-            # arr = np.array(Image.open(t)) / 255
+            arr = np.array(Image.open(t)) / 255
             self.task_queue.put((arr, t))
             # if START_CONDITION.acquire():
             #     START_CONDITION.notify_all()
@@ -427,7 +431,7 @@ class OptionsConsumer(threading.Thread):
 def option_get_haze_array_with_transmission_name(name):
     _, filename = os.path.split(name)
     fname, _ = os.path.splitext(filename)
-    fname_with_ext = fname + ".jpg"
+    fname_with_ext = fname + IMAGE_SUFFIX
     full_name = os.path.join(HAZY_DIR, fname_with_ext)
     return np.array(Image.open(full_name)) / 255
 
