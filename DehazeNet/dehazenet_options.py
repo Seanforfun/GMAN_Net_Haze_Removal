@@ -47,12 +47,19 @@ class OptionsMap(Enum):
     ATTENUATION_DEPTH_MAP = 2
 
 
-# TODO When Options is GET_ESTIMATE_ALPHA, Select a map used to calculate the alpha
-MAP_OPTION = OptionsMap.ATTENUATION_DEPTH_MAP
+class OptionsHighestIntensity(Enum):
+    HIGHEST_INTENSITY = 0
+    SMALLEST_DIFFERENCE_BETWEEN_CHANNELS = 1
+
 
 # TODO Modify options here
 OPTION = Options.GET_ESTIMATE_ALPHA
 
+# TODO When Options is GET_ESTIMATE_ALPHA, Select a map used to calculate the alpha
+MAP_OPTION = OptionsMap.ATTENUATION_DEPTH_MAP
+
+# TODO Option of selecting points from 0.1 % transmission map
+HIGHEST_INTENSITY_OPTION = OptionsHighestIntensity.HIGHEST_INTENSITY
 
 class OptionFactory:
     @staticmethod
@@ -346,29 +353,56 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
         H = shape[0]
         W = shape[1]
         point_one_number = int(np.size(transmission) * 0.001)
-        maximum_intensity = 0
         for h in range(H):
             for w in range(W):
                 pq.put(OptionGetEstimateAlpha.Pixel(transmission[h][w], h, w))
+        estimate_alpha = OptionGetEstimateAlpha.__get_estimate_alpha_by_option(OptionsHighestIntensity.HIGHEST_INTENSITY,
+                                                                               pq, point_one_number, haze)
+        printed_estimate_alpha = abs(estimate_alpha - float(alpha)) / float(alpha)
+        print("GT: %.3f Estimate Alpha: %.5f Error rate: " % (float(alpha), estimate_alpha) + '{:.3%}'.format(
+            printed_estimate_alpha))
+        result_queue.put(printed_estimate_alpha)
+
+    @staticmethod
+    def __get_estimate_alpha_by_option(option, transmission_queue, point_number, haze_array):
+        '''
+        :param option:  Decide using what kind of method to estimate alpha.
+        :param transmission_queue: In order to get the 0.1% smallest medium map value and get estimate alpha
+        :param point_number: Number of points for 0.1% of medium map
+        :param haze_array: RGB array of hazed images.
+        :return: Estimate alpha
+        '''
+        if option == OptionsHighestIntensity.SMALLEST_DIFFERENCE_BETWEEN_CHANNELS:
+            return OptionGetEstimateAlpha.__get_estimate_alpha_by_smallest_distance(transmission_queue, point_number, haze_array)
+        elif option == OptionsHighestIntensity.HIGHEST_INTENSITY:
+            return OptionGetEstimateAlpha.__get_estimate_alpha_by_highest_average(transmission_queue, point_number, haze_array)
+        else:
+            raise ValueError("Current option is not implemented!")
+
+    @staticmethod
+    def __get_estimate_alpha_by_smallest_distance(transmission_queue, point_number, haze):
         pq_for_minimum_distance = queue.PriorityQueue()
-        while point_one_number > 0:
-            point_one_number -= 1
-            pixel = pq.get()
-            # maximum_intensity = max(
-            #     ((haze[pixel.h][pixel.w][0] + haze[pixel.h][pixel.w][1] + haze[pixel.h][pixel.w][2]) / 3),
-            #     maximum_intensity)
+        while point_number > 0:
+            point_number -= 1
+            pixel = transmission_queue.get()
             distance = (haze[pixel.h][pixel.w][0] - haze[pixel.h][pixel.w][1]) ** 2 + \
                        (haze[pixel.h][pixel.w][1] - haze[pixel.h][pixel.w][2]) ** 2 + \
                        (haze[pixel.h][pixel.w][0] - haze[pixel.h][pixel.w][2]) ** 2
             pq_for_minimum_distance.put(OptionGetEstimateAlpha.ChannelDistance(distance, pixel.h, pixel.w))
         solution_pixel = pq_for_minimum_distance.get()
-        # estimate_alpha = (haze[solution_pixel.h][solution_pixel.w][0] + haze[solution_pixel.h][solution_pixel.w][1] +
-        #                   haze[solution_pixel.h][solution_pixel.w][2]) / 3
-        estimate_alpha = max(haze[solution_pixel.h][solution_pixel.w][0],  haze[solution_pixel.h][solution_pixel.w][1], haze[solution_pixel.h][solution_pixel.w][2])
-        printed_estimate_alpha = abs(estimate_alpha - float(alpha)) / float(alpha)
-        print("GT: %.3f Estimate Alpha: %.5f Error rate: " % (float(alpha), estimate_alpha) + '{:.3%}'.format(
-            printed_estimate_alpha))
-        result_queue.put(printed_estimate_alpha)
+        return max(haze[solution_pixel.h][solution_pixel.w][0], haze[solution_pixel.h][solution_pixel.w][1], haze[
+            solution_pixel.h][solution_pixel.w][2])
+
+    @staticmethod
+    def __get_estimate_alpha_by_highest_average(transmission_queue, point_number, haze):
+        maximum_intensity = 0
+        while point_number > 0:
+            point_number -= 1
+            pixel = transmission_queue.get()
+            maximum_intensity = max(
+                ((haze[pixel.h][pixel.w][0] + haze[pixel.h][pixel.w][1] + haze[pixel.h][pixel.w][2]) / 3),
+                maximum_intensity)
+        return maximum_intensity
 
 
 # task[0]: Transmission array

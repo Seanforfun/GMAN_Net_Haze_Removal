@@ -1,6 +1,7 @@
 import cv2
 import math
 import numpy as np
+from PIL import  Image as Image
 
 
 def DarkChannel(im, sz):
@@ -82,19 +83,24 @@ if __name__ == '__main__':
     import sys
 
     src = cv2.imread('./HazeImages/TestImages/0001_0.8_0.2.jpg')
-
+    print(src)
     I = src.astype('float64') / 255
 
     dark = DarkChannel(I, 15)
     A = AtmLight(I, dark)
-    # A = np.array([[0.95, 0.95, 0.95]])
-    print(A)
     te = TransmissionEstimate(I, A, 15)
     t = TransmissionRefine(src, te)
+    # print(np.shape(t))
     J = Recover(I, t, A, 0.1)
-    print(t.shape)
+
+    J *= 255
+    result = J
+    result = result.astype('uint8')
+    result[result > 255] = 255
+    image_truth = Image.fromarray(result, 'RGB')
+    image_truth.save('test_pred.jpg', 'jpeg')
+
     cv2.imwrite('./transmission.png', t * 255)
-    J = J * 255
     cv2.imwrite("./result.jpg", J)
 
     # cv2.imshow("dark", dark);
