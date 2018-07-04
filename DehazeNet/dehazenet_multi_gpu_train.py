@@ -9,15 +9,14 @@ from __future__ import print_function
 import tensorflow as tf
 import dehazenet_input as di
 import dehazenet_flags as df
-import dehazenet as dn
 import dehazenet_tools as dt
-import dehazenet_eval as de
 import numpy as np
 import re
 from datetime import datetime
 import os.path
 import time
 from PerceNet import *
+import dehazenet_constant as constant
 
 
 # Frames used to save clear training image information
@@ -31,10 +30,6 @@ _hazed_train_img_list = []
 _clear_test_file_names = []
 _clear_test_img_list = []
 _clear_test_directory = {}
-
-# Some Strings
-PROGRAM_START = "viva la vida ."
-PROGRAM_END = "We don't talk anymore."
 
 
 def inference(hazed_batch):
@@ -75,15 +70,6 @@ def inference(hazed_batch):
 
         x = dt.conv('conv6_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
         x = dt.conv('conv6_2', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        # x = tools.conv('conv6_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-        # x = tools.FC_layer('fc6', x, out_nodes=4096)
-        # with tf.name_scope('batch_norm1'):
-        #     x = tools.batch_norm(x)
-        # x = tools.FC_layer('fc7', x, out_nodes=4096)
-        # with tf.name_scope('batch_norm2'):
-        #     x = tools.batch_norm(x)
-        # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
 
     return x
 
@@ -91,12 +77,6 @@ def inference(hazed_batch):
 def lz_training_net(hazed_batch):
     x_s = dt.conv('DN_conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv('DN_conv1_2', x_s, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-
-    # with tf.name_scope('pool1'):
-    #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
-    #
-    # with tf.name_scope('pool2'):
-    #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
 
     x = dt.conv('upsampling_1', x, 64, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
     x = dt.conv('upsampling_2', x, 128, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
@@ -137,41 +117,19 @@ def lz_training_net(hazed_batch):
     x = dt.conv('DN_conv5_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_nonacti('DN_conv5_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = tf.add(x, x4)
-    # x = tools.batch_norm(x)
     x = dt.acti_layer(x)
 
     x = dt.deconv('DN_deconv1', x, 64, 64, output_shape=[35, 112, 112, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
 
-    # x5 = tools.conv('DN_conv6_1', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.conv('DN_conv6_2', x5, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.conv_nonacti('DN_conv6_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tf.add(x, x5)
-    # # x = tools.batch_norm(x)
-    # x = tools.acti_layer(x)
-
     x = dt.deconv('DN_deconv2', x, 64, 64, output_shape=[35, 224, 224, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
     x = dt.conv('DN_conv6_6', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_nonacti('DN_conv6_7', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x6 = tools.conv('DN_conv6_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.conv('DN_conv6_5', x6, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.conv_nonacti('DN_conv6_6', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = tf.add(x, x_s)
     # # x = tools.batch_norm(x)
     x = dt.acti_layer(x)
 
     x = dt.conv('DN_conv6_8', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
-    # x = tools.conv('conv6_4', x, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-    # x = tools.FC_layer('fc6', x, out_nodes=4096)
-    # with tf.name_scope('batch_norm1'):
-
-    #     x = tools.batch_norm(x)
-    # x = tools.FC_layer('fc7', x, out_nod
-    #
-    # es=4096)
-    # with tf.name_scope('batch_norm2'):
-    #     x = tools.batch_norm(x)
-    # x = tools.FC_layer('fc8', x, out_nodes=n_classes)
     return x
 
 
@@ -183,8 +141,8 @@ def loss(vgg_per, result_batch, clear_image_batch):
     but is left here to show respect to CIFAR-10 source code
     """
 
-    output_per_1, output_per_2, output_per_3 = vgg_per.build(result_batch)
-    output_tru_1, output_tru_2, output_tru_3 = vgg_per.build(clear_image_batch)
+    # output_per_1, output_per_2, output_per_3 = vgg_per.build(result_batch)
+    # output_tru_1, output_tru_2, output_tru_3 = vgg_per.build(clear_image_batch)
     # vgg_tru = Vgg16()
     # vgg_tru.build(clear_image_batch)
 
@@ -197,10 +155,10 @@ def loss(vgg_per, result_batch, clear_image_batch):
     # output_per_3 = vgg_per.conv2_2
     # output_tru_3 = vgg_tru.conv2_2
 
-    per_loss = (tf.reduce_mean(tf.square(tf.subtract(output_per_1, output_tru_1))) / 3136) + \
-               (tf.reduce_mean(tf.square(tf.subtract(output_per_2, output_tru_2))) / 50176) + \
-               (tf.reduce_mean(tf.square(tf.subtract(output_per_3, output_tru_3))) / 12544)
-    loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch))) + 0.01 * per_loss
+    # per_loss = (tf.reduce_mean(tf.square(tf.subtract(output_per_1, output_tru_1))) / 3136) + \
+    #            (tf.reduce_mean(tf.square(tf.subtract(output_per_2, output_tru_2))) / 50176) + \
+    #            (tf.reduce_mean(tf.square(tf.subtract(output_per_3, output_tru_3))) / 12544)
+    loss = tf.reduce_mean(tf.square(tf.subtract(result_batch, clear_image_batch)))# + 0.01 * per_loss
     tf.add_to_collection('losses', loss)
 
     # The total loss is defined as the ms loss plus all of the weight
@@ -223,7 +181,7 @@ def tower_loss(vgg_per, scope, hazed_batch, clear_batch):
     # logist = inference(hazed_batch)
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
-    _ = loss(vgg_per,logist, clear_batch)
+    _ = loss(vgg_per, logist, clear_batch)
     # Assemble all of the losses for the current tower only.
     losses = tf.get_collection('losses', scope)
     # Calculate the total loss for the current tower.
@@ -234,7 +192,7 @@ def tower_loss(vgg_per, scope, hazed_batch, clear_batch):
     for l in losses + [total_loss]:
         # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
         # session. This helps the clarity of presentation on tensorboard.
-        loss_name = re.sub('%s_[0-9]*/' % dn.TOWER_NAME, '', l.op.name)
+        loss_name = re.sub('%s_[0-9]*/' % constant.TOWER_NAME, '', l.op.name)
         tf.summary.scalar(loss_name, l)
     return total_loss, logist
 
@@ -278,23 +236,23 @@ def average_gradients(tower_grads):
 
 
 def train():
-    print(PROGRAM_START)
+    print(constant.PROGRAM_START)
     # Create all dehazenet information in /cpu:0
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         # Create a variable to count the number of train() calls. This equals the
         # number of batches processed * FLAGS.num_gpus.
         global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
         # Calculate the learning rate schedule.
-        if di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN < df.FLAGS.batch_size:
+        if constant.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN < df.FLAGS.batch_size:
             raise RuntimeError(' NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN cannot smaller than batch_size!')
-        num_batches_per_epoch = (di.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
+        num_batches_per_epoch = (constant.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN /
                                  df.FLAGS.batch_size)
-        decay_steps = int(num_batches_per_epoch * dn.NUM_EPOCHS_PER_DECAY)
+        decay_steps = int(num_batches_per_epoch * constant.NUM_EPOCHS_PER_DECAY)
 
-        lr = tf.train.exponential_decay(dn.INITIAL_LEARNING_RATE,
+        lr = tf.train.exponential_decay(constant.INITIAL_LEARNING_RATE,
                                         global_step,
                                         decay_steps,
-                                        dn.LEARNING_RATE_DECAY_FACTOR,
+                                        constant.LEARNING_RATE_DECAY_FACTOR,
                                         staircase=True)
 
         # Create an optimizer that performs gradient descent.
@@ -313,7 +271,7 @@ def train():
             di.image_input(df.FLAGS.haze_train_images_dir, _hazed_train_file_names, _hazed_train_img_list,
                            clear_dict=None, clear_image=False)
             if len(_hazed_train_img_list) == 0:
-                raise RuntimeError("No image found! Please supply hazed images for training or eval ")
+                 raise RuntimeError("No image found! Please supply hazed images for training or eval ")
 
             # Write data into a TFRecord saved in path ./TFRecord
             di.convert_to_tfrecord(_hazed_train_img_list, _hazed_train_file_names, _clear_train_directory,
@@ -328,7 +286,7 @@ def train():
         with tf.variable_scope(tf.get_variable_scope()):
             for i in range(df.FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
-                    with tf.name_scope('%s_%d' % (dn.TOWER_NAME, i)) as scope:
+                    with tf.name_scope('%s_%d' % (constant.TOWER_NAME, i)) as scope:
                         # Dequeues one batch for the GPU
                         hazed_image_batch, clear_image_batch = batch_queue.dequeue()
                         # Calculate the loss for one tower of the dehazenet model. This function
@@ -363,7 +321,7 @@ def train():
                 summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
 
         # Track the moving averages of all trainable variables.
-        variable_averages = tf.train.ExponentialMovingAverage(dn.MOVING_AVERAGE_DECAY, global_step)
+        variable_averages = tf.train.ExponentialMovingAverage(constant.MOVING_AVERAGE_DECAY, global_step)
         variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
         # Group all updates to into a single train op.
@@ -417,7 +375,7 @@ def train():
             if step % 1000 == 0 or (step + 1) == df.FLAGS.max_steps:
                 checkpoint_path = os.path.join(df.FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
-    print(PROGRAM_END)
+    print(constant.PROGRAM_END)
 
 
 if __name__ == '__main__':

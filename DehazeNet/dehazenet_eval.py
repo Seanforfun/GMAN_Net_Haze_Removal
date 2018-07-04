@@ -10,9 +10,7 @@ from __future__ import print_function
 import tensorflow as tf
 import dehazenet_input as di
 import dehazenet_tools as dt
-import dehazenet_eval as de
-import dehazenet_multi_gpu_train as dmgt
-import dehazenet as dn
+import dehazenet_constant as constant
 import dehazenet_flags as df
 import numpy as np
 import skimage.io as io
@@ -29,8 +27,6 @@ from datetime import datetime
 import os.path
 import time
 
-EVAL_TOWER_NAME = "tower"
-EVAL_MOVING_AVERAGE_DECAY = 0.9999
 # Frames used to save clear training image information
 _clear_test_file_names = []
 _clear_test_img_list = []
@@ -38,13 +34,7 @@ _clear_test_directory = {}
 # Frames used to save hazed training image information
 _hazed_test_file_names = []
 _hazed_test_img_list = []
-IMAGE_JPG_FORMAT = 'jpg'
-IMAGE_PNG_FORMAT = 'png'
-SINGLE_IMAGE_NUM = 1
 
-IMAGE_INDEX = 0
-IMAGE_A = 1
-IMAGE_BETA = 2
 
 _hazed_test_A_dict = {}
 _hazed_test_beta_dict = {}
@@ -64,21 +54,22 @@ def eval_hazed_input(dir, file_names, image_list, dict_A, dict_beta):
             hazed_image_split = temp_name.split('_')
             file_name = os.path.join(dir, filename)
             current_image = Image(path=file_name)
-            current_image.image_index = hazed_image_split[IMAGE_INDEX]
+            current_image.image_index = hazed_image_split[constant.IMAGE_INDEX]
             image_list.append(current_image)
-            if hazed_image_split[IMAGE_A] not in dict_A:
+            if hazed_image_split[constant.IMAGE_A] not in dict_A:
                 A_list = []
                 A_list.append(current_image)
-                dict_A[hazed_image_split[IMAGE_A]] = A_list
+                dict_A[hazed_image_split[constant.IMAGE_A]] = A_list
             else:
-                dict_A[hazed_image_split[IMAGE_A]].append(current_image)
-            if hazed_image_split[IMAGE_BETA] not in dict_beta:
+                dict_A[hazed_image_split[constant.IMAGE_A]].append(current_image)
+            if hazed_image_split[constant.IMAGE_BETA] not in dict_beta:
                 beta_list = []
                 beta_list.append(current_image)
-                dict_beta[hazed_image_split[IMAGE_BETA]] = beta_list
+                dict_beta[hazed_image_split[constant.IMAGE_BETA]] = beta_list
             else:
-                dict_beta[hazed_image_split[IMAGE_BETA]].append(current_image)
+                dict_beta[hazed_image_split[constant.IMAGE_BETA]].append(current_image)
     return file_names, image_list, dict_A, dict_beta
+
 
 def lz_net_eval(hazed_batch, height, width):
     x_s = dt.conv_eval('DN_conv1_1', hazed_batch, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
@@ -91,20 +82,16 @@ def lz_net_eval(hazed_batch, height, width):
     x = dt.conv_eval('DN_conv2_1', x1, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_nonacti_eval('DN_conv2_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = tf.add(x, x1)
-    # x = tools.batch_norm(x)
     x = dt.acti_layer(x)
 
-    # x = tools.conv('DN_conv2_3', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_eval('DN_conv2_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
     x2 = dt.conv_eval('DN_conv3_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_eval('DN_conv3_2', x2, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_nonacti_eval('DN_conv3_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = tf.add(x, x2)
-    # x = tools.batch_norm(x)
     x = dt.acti_layer(x)
 
-    # x = tools.conv('DN_conv3_4', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_eval('DN_conv3_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
     x3 = dt.conv_eval('DN_conv4_1', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
@@ -112,7 +99,6 @@ def lz_net_eval(hazed_batch, height, width):
     x = dt.conv_eval('DN_conv4_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_nonacti_eval('DN_conv4_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = tf.add(x, x3)
-    # x = tools.batch_norm(x)
     x = dt.acti_layer(x)
 
     x = dt.conv_eval('DN_conv4_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
@@ -123,7 +109,6 @@ def lz_net_eval(hazed_batch, height, width):
     x = dt.conv_eval('DN_conv5_4', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = dt.conv_nonacti_eval('DN_conv5_5', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     x = tf.add(x, x4)
-    # x = tools.batch_norm(x)
     x = dt.acti_layer(x)
 
     x = dt.deconv_eval('DN_deconv1', x, 64, 64, output_shape=[1, int((height + 1)/2), int((width + 1)/2), 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
@@ -138,6 +123,8 @@ def lz_net_eval(hazed_batch, height, width):
     x = dt.conv_eval('DN_conv6_8', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
     return x
 
+
+@DeprecationWarning
 def _eval_generate_image_batch(hazed_image, min_queue_examples, batch_size, shuffle=True):
     num_preprocess_threads = 8
 
@@ -200,7 +187,7 @@ def eval_once(saver, train_op, hazed_images, clear_images, hazed_images_obj_list
             ssim_list.append(ssim_value)
             psnr_list.append(psnr_value)
             print('-------------------------------------------------------------------------------------------------------------------------------')
-            format_str = ('%s: image: %s PSNR: %f; SSIM: %f')
+            format_str = '%s: image: %s PSNR: %f; SSIM: %f'
             print(format_str % (datetime.now(), hazed_images_obj_list[index].path, psnr_value, ssim_value))
             print('-------------------------------------------------------------------------------------------------------------------------------')
 
@@ -318,12 +305,11 @@ def evaluate_cartesian_product():
 
         hazed_image = tf.placeholder(tf.float32,
                                      shape=[1, df.FLAGS.input_image_height, df.FLAGS.input_image_width,
-                                            dn.RGB_CHANNEL])
+                                            constant.RGB_CHANNEL])
 
-        # logist = dmgt.inference(hazed_image)
         logist = lz_net_eval(hazed_image,1,1)
         variable_averages = tf.train.ExponentialMovingAverage(
-            dn.MOVING_AVERAGE_DECAY)
+            constant.MOVING_AVERAGE_DECAY)
         variables_to_restore = variable_averages.variables_to_restore()
         saver = tf.train.Saver(variables_to_restore)
         # TODO Zheng Liu please remove the comments of next two lines and add comment to upper five lines
@@ -374,7 +360,7 @@ def evaluate():
             height_list.append(shape[0])
             width_list.append(shape[1])
             hazed_image_placeholder = tf.placeholder(tf.float32,
-                                         shape=[1, shape[0], shape[1], dn.RGB_CHANNEL])
+                                         shape=[1, shape[0], shape[1], constant.RGB_CHANNEL])
             hazed_image_placeholder_list.append(hazed_image_placeholder)
             hazed_image_arr = np.array(hazed_image)
             float_hazed_image = hazed_image_arr.astype('float32') / 255
@@ -389,10 +375,9 @@ def evaluate():
             if len(clear_image_list) != len(hazed_image_list):
                 raise RuntimeError("hazed images cannot correspond to clear images!")
         for index in range(len(hazed_image_list)):
-            # logist = dmgt.inference(hazed_image)
             logist = lz_net_eval(hazed_image_placeholder_list[index], height_list[index], width_list[index])
             variable_averages = tf.train.ExponentialMovingAverage(
-                dn.MOVING_AVERAGE_DECAY)
+                constant.MOVING_AVERAGE_DECAY)
             variables_to_restore = variable_averages.variables_to_restore()
             saver = tf.train.Saver(variables_to_restore)
             if not df.FLAGS.eval_only_haze:
@@ -419,14 +404,13 @@ def cal_average(list):
 
 
 def write_images_to_file(logist, image, height, width, sess):
-    array = np.reshape(logist[0], newshape=[height, width, dn.RGB_CHANNEL])
+    array = np.reshape(logist[0], newshape=[height, width, constant.RGB_CHANNEL])
     array = array * 255
     # arr1 = np.uint8(array)
     array = tf.saturate_cast(array, dtype=tf.uint8)
     arr1 = sess.run(array)
     result_image = im.fromarray(arr1, 'RGB')
     image_name_base = image.image_index
-    # cv2.imwrite(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', arr1)
     result_image.save(df.FLAGS.clear_result_images_dir + image_name_base + "_" + str(time.time()) + '_pred.jpg', 'jpeg')
     return arr1
 

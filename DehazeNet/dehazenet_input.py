@@ -17,17 +17,8 @@ from skimage import transform
 from PIL import Image as im
 
 from Image import *
-import dehazenet as dehazenet
 import dehazenet_flags as df
-# import dehazenet_darkchannel as dd
-import matplotlib.image as mpimg
-
-
-IMAGE_INDEX_BIT = 4
-# TODO Need to change value before real operations
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 192780 * 2
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 10000
-IMAGE_SUFFIX_MIN_LENGTH = 4
+import dehazenet_constant as constant
 
 
 def image_list_shuffle(image_list):
@@ -52,11 +43,11 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
             file_name = os.path.join(dir, image_filename)
             current_image = Image(path=file_name)
             current_image.key = id(current_image)
-            current_image.image_index = image_filename[0:IMAGE_INDEX_BIT]
+            current_image.image_index = image_filename[0:constant.IMAGE_INDEX_BIT]
             image_list.append(current_image)
             # Put all clear images into dictionary
             if clear_image:
-                if len(image_filename) < IMAGE_INDEX_BIT + IMAGE_SUFFIX_MIN_LENGTH:
+                if len(image_filename) < constant.IMAGE_INDEX_BIT + constant.IMAGE_SUFFIX_MIN_LENGTH:
                     raise RuntimeError("Incorrect image name: " + image_filename)
                 clear_dict[current_image.image_index] = current_image
     if not clear_image:
@@ -104,7 +95,7 @@ def bytes_feature(value):
 
 
 def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, width, tfrecord_path, test_image_list):
-    expect_size = df.FLAGS.input_image_height * df.FLAGS.input_image_width * dehazenet.RGB_CHANNEL
+    expect_size = df.FLAGS.input_image_height * df.FLAGS.input_image_width * constant.RGB_CHANNEL
     counter = 0
     test_clear_index_list = []
     for image in test_image_list:
@@ -206,28 +197,11 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
     else:
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float32)
     min_fraction_of_examples_in_queue = 0.05
-    min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
+    min_queue_examples = int(constant.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              min_fraction_of_examples_in_queue)
     return _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=False)
 
 
 if __name__ == '__main__':
-    # Unit test
-    file_names = []
-    image_list=[]
-    clear_dict = {}
-    image_input("./ClearImages", file_names, image_list, clear_dict=clear_dict,clear_image=True)
-    image_list_shuffle(image_list)
-    print(file_names)
-    print(image_list)
-    print(clear_dict)
-    # image_list = _read_image(image_list)
-    for img in image_list:
-        print(tf.size(img.image_tensor))
-    a = [1,2,3]
-    print(tf.size(a))
-    print(np.shape(a))
-    # get_image_batch(1, 2, image_list, clear_dict)
-    image_tensor = tf.image.decode_jpeg("./ testd / test1 / UNADJUSTEDNONRAW_thumb_286.jpg", channels=dehazenet.RGB_CHANNEL)
-    print(tf.size(image_tensor))
+    pass
 

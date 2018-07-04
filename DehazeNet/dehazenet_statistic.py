@@ -14,25 +14,8 @@ import math
 import dehazenet_transmission
 import multiprocessing
 import time
+import dehazenet_constant as constant
 
-
-GROUP_NUM = 10
-CHANNEL_NUM = 3
-CLEAR_INDEX_BIT = 4
-TRANS_INDEX_BIT = 4
-NEED_SERIALIZATION = True
-CLEAR_DICTIONARY = {}
-TRANSMISSION_DICTIONARY = {}
-SERIALIZATION_FILE_NAME = './PQ.pkl'
-START_CALCULATION = True
-# q = PriorityQueue()  # Priority queue used to save pixel psnr information in increasing order, need lock
-# key: (alpha, beta) value:(lock, list)
-# TEMP_RESULT_BAG = {}
-SERIALIZATION_BAG = {}
-
-CLEAR_DIR = "./ClearImages/TestImages"
-RESULT_DIR = "./ClearResultImages"
-TRANSMISSION_DIR = "./ClearImages/TransImages"
 
 q_lock = threading.Lock()
 START_CONDITION = threading.Condition()
@@ -54,23 +37,20 @@ class StatisticProducer(threading.Thread):
                 RESULT_IMAGE_QUEUE.put(None)
                 self.task_queue.put(None)
                 break
-            result_single_dir = os.path.join(RESULT_DIR, result_image_name)
-            clear_index = result_image_name[0:CLEAR_INDEX_BIT]
-            trans_index = result_image_name[0:TRANS_INDEX_BIT]
-            if clear_index not in CLEAR_DICTIONARY:
+            result_single_dir = os.path.join(constant. STATS_RESULT_DIR, result_image_name)
+            clear_index = result_image_name[0:constant. STATS_CLEAR_INDEX_BIT]
+            trans_index = result_image_name[0:constant. STATS_TRANS_INDEX_BIT]
+            if clear_index not in constant. STATS_CLEAR_DICTIONARY:
                 raise RuntimeError(result_image_name + ' cannot find corresponding clear image.')
-            clear_single_dir = CLEAR_DICTIONARY[clear_index]
-            if trans_index not in TRANSMISSION_DICTIONARY:
+            clear_single_dir = constant. STATS_CLEAR_DICTIONARY[clear_index]
+            if trans_index not in constant. STATS_TRANSMISSION_DICTIONARY:
                 raise RuntimeError(result_image_name + ' cannot find corresponding transmission image.')
-            transmission_single_dir = TRANSMISSION_DICTIONARY[trans_index]
+            transmission_single_dir = constant. STATS_TRANSMISSION_DICTIONARY[trans_index]
             clear, result, transmission = sta_read_image(clear_single_dir, result_single_dir, transmission_single_dir)
             [_, filename] = os.path.split(transmission_single_dir)
             _, alpha, beta = dehazenet_transmission.trans_get_alpha_beta(filename)
             current_task = ImageTask(clear, result, transmission, alpha, beta)
             self.task_queue.put(current_task)
-            # if START_CONDITION.acquire():
-            #     START_CONDITION.notifyAll()
-            # START_CONDITION.release()
         print('Statistic Producer finish')
 
 
@@ -85,9 +65,6 @@ class StatisticConsumer(threading.Thread):
         self.bag = bag
 
     def run(self):
-        # if START_CONDITION.acquire():
-        #     START_CONDITION.wait()
-        # START_CONDITION.release()
         while True:
             task = self.task_queue.get()
             if task is None:
@@ -159,14 +136,14 @@ def sta_image_input(clear_dir, transmission_dir, result_dir):
     # Construct a dictionary for clear images
     for clear_image_name in clear_file_list:
         file_path = os.path.join(clear_dir, clear_image_name)
-        clear_index = clear_image_name[0:CLEAR_INDEX_BIT]
-        CLEAR_DICTIONARY[clear_index] = file_path
+        clear_index = clear_image_name[0:constant. STATS_CLEAR_INDEX_BIT]
+        constant.STATS_CLEAR_DICTIONARY[clear_index] = file_path
 
     # Construct a dictionary for transmission_images
     for transmission_image_name in transmission_file_list:
         file_path = os.path.join(transmission_dir, transmission_image_name)
-        transmission_index = transmission_image_name[0:TRANS_INDEX_BIT]
-        TRANSMISSION_DICTIONARY[transmission_index] = file_path
+        transmission_index = transmission_image_name[0:constant. STATS_TRANS_INDEX_BIT]
+        constant.STATS_TRANSMISSION_DICTIONARY[transmission_index] = file_path
 
     for result_image_name in result_file_list:
         RESULT_IMAGE_QUEUE.put(result_image_name)
@@ -191,7 +168,7 @@ def sta_cal_single_image_by_area(clear, result, transmission, psnr_map, group_id
                 transmission_matting[h][w] = 1
     temp_clear = np.zeros((H, W, 3))
     temp_result = np.zeros((H, W, 3))
-    for i in range(CHANNEL_NUM):
+    for i in range(constant. STATS_CHANNEL_NUM):
         temp_clear[:, :, i] = np.multiply(clear[:, :, i], transmission_matting)
         temp_result[:, :, i] = np.multiply(result[:, :, i], transmission_matting)
 
@@ -251,8 +228,8 @@ def sta_create_visual_result(result_map, pool, double_map):
            This makes indexing a list a[i] an operation whose cost is independent of the size of the list or the value of the index.
            When items are appended or inserted, the array of references is resized. Some cleverness is applied to improve the performance of appending items repeatedly; when the array must be grown, some extra space is allocated so the next few times don’t require an actual resize.
         '''
-        group_length = math.floor(result_len / GROUP_NUM)
-        for i in range(GROUP_NUM):
+        group_length = math.floor(result_len / constant. STATS_GROUP_NUM)
+        for i in range(constant. STATS_GROUP_NUM):
             low = group_length * i
             lst_vars = [low, group_length, single_key_list, double_map[key]]
             func_var = [(lst_vars, None)]
@@ -288,11 +265,11 @@ def main():
     serialization_bag = {}
     # Use the data from calculation or serialization file to create the statistical result
     # Create a thread pool, # of thread = GROUP_NUM * 2.
-    pool = threadpool.ThreadPool(GROUP_NUM * 4)
+    pool = threadpool.ThreadPool(constant. STATS_GROUP_NUM * 4)
     temp_result_bag = {}
-    if START_CALCULATION:
+    if constant. STATS_START_CALCULATION:
         # call dehazenet_input to read the images directory.
-        sta_image_input(CLEAR_DIR, TRANSMISSION_DIR, RESULT_DIR)
+        sta_image_input(constant. STATS_CLEAR_DIR, constant. STATS_TRANSMISSION_DIR, constant. STATS_RESULT_DIR)
         task_queue = queue.Queue()
         thread_list = []
         #  Start doing statistic calculation
@@ -319,7 +296,7 @@ def main():
         print("Step 2 : Finish copying queue to the list.")
 
         # Serialization the priority queue to SERIALIZATION_FILE_NAME
-        if NEED_SERIALIZATION:
+        if constant. STATS_NEED_SERIALIZATION:
             serialization_file_list = []
             for key in serialization_bag.keys():
                 serialization_file_name = './alpha_' + str(key[0]) + '_beta_' + str(key[1]) + '.pkl'
@@ -335,10 +312,10 @@ def main():
     else:
         # Load the queue from file
         print("Step 1 : Start loading dump file.")
-        if not os.path.exists(SERIALIZATION_FILE_NAME):
+        if not os.path.exists(constant. STATS_SERIALIZATION_FILE_NAME):
             raise RuntimeError("Serialization file does not exist!")
         else:
-            with open(SERIALIZATION_FILE_NAME, 'rb') as f:
+            with open(constant. STATS_SERIALIZATION_FILE_NAME, 'rb') as f:
                 serialization_bag = pickle.load(f)  # load result map from file
             f.close()
             print("Step 2 : Finish loading the list from .pkl file.")
@@ -348,7 +325,7 @@ def main():
     del serialization_bag
     print("Step 3 : Finish calculating visual result.")
 
-    for key in final_result_double_map.keys(): # key is (alpha, beta)
+    for key in final_result_double_map.keys():  # key is (alpha, beta)
         single_result_map = final_result_double_map[key]
         result_queue = queue.PriorityQueue()
         for k in single_result_map.keys():

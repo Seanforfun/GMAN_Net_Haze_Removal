@@ -1,6 +1,6 @@
 import numpy as np
 import os
-import dehazenet_input as di
+import dehazenet_constant as constant
 import queue
 import threading
 import dehazenet_transmission as dt
@@ -45,7 +45,7 @@ def opt_input(haze_dir, result_dir):
 
     for haze_image in haze_file_list:
         _, filename = os.path.split(haze_image)
-        CLEAR_IMAGE_DICTIONARY[filename[0:di.IMAGE_INDEX_BIT]] = os.path.join(haze_dir, haze_image)
+        CLEAR_IMAGE_DICTIONARY[filename[0:constant.IMAGE_INDEX_BIT]] = os.path.join(haze_dir, haze_image)
     return q
 
 
@@ -149,7 +149,7 @@ class OptProducer(threading.Thread):
             result_array = np.array(Image.open(single_image))
             result_array = result_array.astype("float32") / 255
             _, filename = os.path.split(single_image)
-            image_index = filename[0:di.IMAGE_INDEX_BIT]
+            image_index = filename[0:constant.IMAGE_INDEX_BIT]
             hazy_image_path, alpha = opt_get_alpha(image_index)
             hazy_array = np.array(Image.open(hazy_image_path))
             hazy_array = hazy_array.astype('float32') / 255
@@ -171,9 +171,6 @@ class OptConsumer(threading.Thread):
         self.result_queue = result_queue
 
     def run(self):
-        # if START_CONDITION.acquire():
-        #     START_CONDITION.wait()
-        # START_CONDITION.release()
         while True:
             task = self.task_queue.get()
             if task is None:

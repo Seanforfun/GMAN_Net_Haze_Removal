@@ -18,19 +18,12 @@ from enum import Enum
 from abc import ABCMeta,abstractmethod
 from DarkChannelPrior import dehazenet_darkchannel as dd
 from ColorAttenuationPriorDehazing import runDehazing
+import dehazenet_constant as constant
 
-TRANS_DIR = "./ClearImages/TransImages"
-HAZY_DIR = "./HazeImages/TestImages"
-STATISTICAL_DIR = "./StatisticalFigure"
+
 START_CONDITION = threading.Condition()
 RESULT_QUEUE = queue.Queue()
-THRESHOLD = 0.005
-LOWER_BOUNDARY = 0.7
-STEP_SIZE = 0.01
-TRANSMISSION_THRESHOLD = 0.001
-PNG_SUFFIX = '.png'
-JPG_SUFFIX = '.jpg'
-IMAGE_SUFFIX = PNG_SUFFIX
+
 
 class Options(Enum):
     GET_CLOSE_ZERO_TRANSMISSION_STATISTICS = 0
@@ -50,6 +43,12 @@ class OptionsMap(Enum):
 class OptionsHighestIntensity(Enum):
     HIGHEST_INTENSITY = 0
     SMALLEST_DIFFERENCE_BETWEEN_CHANNELS = 1
+    HIGHEST_CHANNEL_VALUE = 2
+
+
+class OptionsInOutDoor(Enum):
+    INDOOR = 0
+    OUTDOOR = 1
 
 
 # TODO Modify options here
@@ -59,7 +58,11 @@ OPTION = Options.GET_ESTIMATE_ALPHA
 MAP_OPTION = OptionsMap.ATTENUATION_DEPTH_MAP
 
 # TODO Option of selecting points from 0.1 % transmission map
-HIGHEST_INTENSITY_OPTION = OptionsHighestIntensity.HIGHEST_INTENSITY
+HIGHEST_INTENSITY_OPTION = OptionsHighestIntensity.HIGHEST_CHANNEL_VALUE
+
+# TODO Option of indoor or outdoor
+IN_OUT_DOOR = OptionsInOutDoor.OUTDOOR
+
 
 class OptionFactory:
     @staticmethod
@@ -127,7 +130,7 @@ class OptionDoCountCloseZero(IOption, IOptionPlot):
         count = 0
         for h in range(H):
             for w in range(W):
-                if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
+                if transmission_array[h][w] < constant.OPTIONS_TRANSMISSION_THRESHOLD:
                     # single_result = (haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3
                     print("(" + str(round(haze_arr[h][w][0], 3)) + "  " + str(round(haze_arr[h][w][1], 3)) + "  " + str(
                         round(haze_arr[h][w][2], 3)) + "), t: " + str(transmission_array[h][w]))
@@ -153,14 +156,14 @@ class OptionGetThreeChannelValueClose(IOption, IOptionPlot):
         expected_number = 0
         for h in range(H):
             for w in range(W):
-                if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) <= THRESHOLD and abs(
-                        haze_arr[h][w][1] - haze_arr[h][w][2]) <= THRESHOLD and abs(
+                if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) <= constant.OPTIONS_THRESHOLD and abs(
+                        haze_arr[h][w][1] - haze_arr[h][w][2]) <= constant.OPTIONS_THRESHOLD and abs(
                     haze_arr[h][w][0] - haze_arr[h][w][2]) \
-                        <= THRESHOLD:
-                    if haze_arr[h][w][0] >= LOWER_BOUNDARY:
+                        <= constant.OPTIONS_THRESHOLD:
+                    if haze_arr[h][w][0] >= constant.OPTIONS_LOWER_BOUNDARY:
                         # pq.put((haze_arr[h][w][0] + haze_arr[h][w][1] + haze_arr[h][w][2]) / 3)
                         pq.put(haze_arr[h][w][0])
-                        if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
+                        if transmission_array[h][w] < constant.OPTIONS_TRANSMISSION_THRESHOLD:
                             expected_number += 1
         result_queue.put((alpha, pq, expected_number, transmission_array_name))
 
@@ -170,9 +173,9 @@ class OptionGetThreeChannelValueClose(IOption, IOptionPlot):
         while not RESULT_QUEUE.empty():
             s_queue = RESULT_QUEUE.get()
             alpha_gt = s_queue[0]
-            plt.xlim(LOWER_BOUNDARY, 1)
+            plt.xlim(constant.OPTIONS_LOWER_BOUNDARY, 1)
             plt.xlabel('Hazy pixel value')
-            my_x_ticks = np.arange(LOWER_BOUNDARY, 1, STEP_SIZE)
+            my_x_ticks = np.arange(constant.OPTIONS_LOWER_BOUNDARY, 1, constant.OPTIONS_STEP_SIZE)
             plt.xticks(my_x_ticks)
             plt.ylabel('Number of points in this region')
             bar_list = []
@@ -180,12 +183,12 @@ class OptionGetThreeChannelValueClose(IOption, IOptionPlot):
                 bar_list.append(round(s_queue[1].get(), 3))
             result_array = np.asarray(bar_list)
             size = np.size(result_array)
-            plt.title("gt: " + str(alpha_gt) + "|threshold: " + str(THRESHOLD) + "|TransmissionThreshold: " +
-                      str(TRANSMISSION_THRESHOLD) + "|fraction: " + str(s_queue[2]) + "/" + str(size))
+            plt.title("gt: " + str(alpha_gt) + "|threshold: " + str(constant.OPTIONS_THRESHOLD) + "|TransmissionThreshold: " +
+                      str(constant.OPTIONS_TRANSMISSION_THRESHOLD) + "|fraction: " + str(s_queue[2]) + "/" + str(size))
             plt.hist(result_array, bins=30, width=0.006, normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
             _, filename = os.path.split(s_queue[3])
             fname, _ = os.path.splitext(filename)
-            fname_with_ext = fname + IMAGE_SUFFIX
+            fname_with_ext = fname + constant.OPTIONS_IMAGE_SUFFIX
             plt.savefig(os.path.join("./StatisticalFigure", fname_with_ext))
             plt.close()
 
@@ -204,7 +207,7 @@ class OptionGetTransmissionHistogram(IOption, IOptionPlot):
         for h in range(H):
             for w in range(W):
                 pq.put(transmission_array[h][w])
-                if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
+                if transmission_array[h][w] < constant.OPTIONS_TRANSMISSION_THRESHOLD:
                     expected_number += 1
         result_queue.put((alpha, pq, expected_number, transmission_array_name))
 
@@ -216,7 +219,7 @@ class OptionGetTransmissionHistogram(IOption, IOptionPlot):
             alpha_gt = s_queue[0]
             plt.xlim(0, 1)
             plt.xlabel('Hazy pixel value')
-            my_x_ticks = np.arange(0, 1, STEP_SIZE)
+            my_x_ticks = np.arange(0, 1, constant.OPTIONS_STEP_SIZE)
             plt.xticks(my_x_ticks)
             plt.ylabel('Number of points in this region')
             bar_list = []
@@ -224,8 +227,8 @@ class OptionGetTransmissionHistogram(IOption, IOptionPlot):
                 bar_list.append(round(s_queue[1].get(), 3))
             result_array = np.asarray(bar_list)
             size = np.size(result_array)
-            plt.title("gt: " + str(alpha_gt) + "|threshold: " + str(THRESHOLD) + "|TransmissionThreshold: " +
-                      str(TRANSMISSION_THRESHOLD) + "|fraction: " + str(s_queue[2]) + "/" + str(size))
+            plt.title("gt: " + str(alpha_gt) + "|threshold: " + str(constant.OPTIONS_THRESHOLD) + "|TransmissionThreshold: " +
+                      str(constant.OPTIONS_TRANSMISSION_THRESHOLD) + "|fraction: " + str(s_queue[2]) + "/" + str(size))
             plt.hist(result_array, bins=30, width=0.005, normed=0, facecolor="blue", edgecolor="black", alpha=0.7)
             _, filename = os.path.split(s_queue[3])
             fname, _ = os.path.splitext(filename)
@@ -260,10 +263,10 @@ class OptionCheckDistancesWithSmallTransmission(IOption, IOptionPlot):
         number_counter = 0
         for h in range(H):
             for w in range(W):
-                if transmission_array[h][w] < TRANSMISSION_THRESHOLD:
-                    if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) < THRESHOLD and \
-                            abs(haze_arr[h][w][1] - haze_arr[h][w][2]) < THRESHOLD and \
-                            abs(haze_arr[h][w][0] - haze_arr[h][w][2]) < THRESHOLD:
+                if transmission_array[h][w] < constant.OPTIONS_TRANSMISSION_THRESHOLD:
+                    if abs(haze_arr[h][w][0] - haze_arr[h][w][1]) < constant.OPTIONS_THRESHOLD and \
+                            abs(haze_arr[h][w][1] - haze_arr[h][w][2]) < constant.OPTIONS_THRESHOLD and \
+                            abs(haze_arr[h][w][0] - haze_arr[h][w][2]) < constant.OPTIONS_THRESHOLD:
                         number_counter += 1
         print(number_counter)
 
@@ -356,7 +359,7 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
         for h in range(H):
             for w in range(W):
                 pq.put(OptionGetEstimateAlpha.Pixel(transmission[h][w], h, w))
-        estimate_alpha = OptionGetEstimateAlpha.__get_estimate_alpha_by_option(OptionsHighestIntensity.HIGHEST_INTENSITY,
+        estimate_alpha = OptionGetEstimateAlpha.__get_estimate_alpha_by_option(HIGHEST_INTENSITY_OPTION,
                                                                                pq, point_one_number, haze)
         printed_estimate_alpha = abs(estimate_alpha - float(alpha)) / float(alpha)
         print("GT: %.3f Estimate Alpha: %.5f Error rate: " % (float(alpha), estimate_alpha) + '{:.3%}'.format(
@@ -376,6 +379,8 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
             return OptionGetEstimateAlpha.__get_estimate_alpha_by_smallest_distance(transmission_queue, point_number, haze_array)
         elif option == OptionsHighestIntensity.HIGHEST_INTENSITY:
             return OptionGetEstimateAlpha.__get_estimate_alpha_by_highest_average(transmission_queue, point_number, haze_array)
+        elif option == OptionsHighestIntensity.HIGHEST_CHANNEL_VALUE:
+            return OptionGetEstimateAlpha.__get_estimate_alpha_by_highest_channel_value(transmission_queue, point_number, haze_array)
         else:
             raise ValueError("Current option is not implemented!")
 
@@ -390,8 +395,8 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
                        (haze[pixel.h][pixel.w][0] - haze[pixel.h][pixel.w][2]) ** 2
             pq_for_minimum_distance.put(OptionGetEstimateAlpha.ChannelDistance(distance, pixel.h, pixel.w))
         solution_pixel = pq_for_minimum_distance.get()
-        return max(haze[solution_pixel.h][solution_pixel.w][0], haze[solution_pixel.h][solution_pixel.w][1], haze[
-            solution_pixel.h][solution_pixel.w][2])
+        return max(haze[solution_pixel.h][solution_pixel.w][0],  haze[solution_pixel.h][solution_pixel.w][1]
+                          , haze[solution_pixel.h][solution_pixel.w][2])
 
     @staticmethod
     def __get_estimate_alpha_by_highest_average(transmission_queue, point_number, haze):
@@ -403,6 +408,15 @@ class OptionGetEstimateAlpha(IOption, IOptionPlot):
                 ((haze[pixel.h][pixel.w][0] + haze[pixel.h][pixel.w][1] + haze[pixel.h][pixel.w][2]) / 3),
                 maximum_intensity)
         return maximum_intensity
+
+    @staticmethod
+    def __get_estimate_alpha_by_highest_channel_value(transmission_queue, point_number, haze):
+        estiamte_alpha = 0
+        while point_number > 0:
+            point_number -= 1
+            pixel = transmission_queue.get()
+            estiamte_alpha = max(np.max(haze[pixel.h, pixel.w, :]), estiamte_alpha)
+        return estiamte_alpha
 
 
 # task[0]: Transmission array
@@ -420,15 +434,22 @@ class OptionsProducer(threading.Thread):
                 self.queue.put(None)
                 self.task_queue.put(None)
                 break
-            # TODO open transmission from .npy file
-            # arr = np.load(t)
-            # TODO open transmission from knight file
-            arr = np.array(Image.open(t)) / 255
+            if IN_OUT_DOOR == OptionsInOutDoor.OUTDOOR:
+                arr = np.load(t)
+            elif IN_OUT_DOOR == OptionsInOutDoor.INDOOR:
+                # open transmission from knight file
+                arr = np.array(Image.open(t)) / 255
+            else:
+                raise RuntimeError("Indoor or outdoor option is not implemented!")
             self.task_queue.put((arr, t))
             # if START_CONDITION.acquire():
             #     START_CONDITION.notify_all()
             # START_CONDITION.release()
         print('Producer finish')
+
+    @staticmethod
+    def __indoor_get_transmission_by_name(self, name):
+        return np.array(Image.open(name)) / 255
 
 
 class OptionsConsumer(threading.Thread):
@@ -465,8 +486,8 @@ class OptionsConsumer(threading.Thread):
 def option_get_haze_array_with_transmission_name(name):
     _, filename = os.path.split(name)
     fname, _ = os.path.splitext(filename)
-    fname_with_ext = fname + IMAGE_SUFFIX
-    full_name = os.path.join(HAZY_DIR, fname_with_ext)
+    fname_with_ext = fname + constant.OPTIONS_IMAGE_SUFFIX
+    full_name = os.path.join(constant.OPTIONS_HAZY_DIR, fname_with_ext)
     return np.array(Image.open(full_name)) / 255
 
 
@@ -480,11 +501,11 @@ def option_input(t_dir):
 
 
 def main():
-    if os.path.exists(STATISTICAL_DIR):
-        shutil.rmtree(STATISTICAL_DIR)
-        os.mkdir(STATISTICAL_DIR)
-    q = option_input(TRANS_DIR)
-    cpu_num = multiprocessing.cpu_count()
+    if os.path.exists(constant.OPTIONS_STATISTICAL_DIR):
+        shutil.rmtree(constant.OPTIONS_STATISTICAL_DIR)
+        os.mkdir(constant.OPTIONS_STATISTICAL_DIR)
+    q = option_input(constant.OPTIONS_TRANS_DIR)
+    cpu_num = multiprocessing.cpu_count() * 2
     task_queue = queue.Queue()
     thread_list = []
     flag_lock = WRLock.RWLock()

@@ -6,10 +6,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import numpy as np
-import time
-from PIL import Image as im
-import cv2
 
 class Image(object):
     def __init__(self, path, key=None, image_tensor=None, image_index=None):
@@ -20,4 +16,4 @@ class Image(object):
 
 
 if __name__ == '__main__':
-    print(1/3)
+    pass

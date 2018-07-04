@@ -4,7 +4,7 @@
 #  generate hazy images from clear images.
 #  ====================================================
 import os
-import dehazenet_input as di
+import dehazenet_constant as constant
 import queue
 import threading
 from PIL import Image as Image
@@ -12,18 +12,9 @@ import numpy as np
 import time
 import multiprocessing
 
-CLEAR_DIR = './ClearImages/TestImages'
-HAZY_DIR = './HazeImages/TestImages'
-TRANSMISSION_DIR = './ClearImages/TransImages'
 # Dictinary for saving clear images
 CLEAR_IMAGE_DICTIONARY = {}
 HAZY_IMAGE_LIST = []
-
-IMAGE_INDEX = 0
-IMAGE_A = 1
-IMAGE_BETA = 2
-
-START_CONDITION = threading.Condition()
 
 
 class Task:
@@ -47,7 +38,8 @@ def trans_get_alpha_beta(filename_with_extension):
     '''
     filename, file_extension = os.path.splitext(filename_with_extension)
     filename_split = filename.split('_')
-    return filename_split[IMAGE_INDEX], filename_split[IMAGE_A], filename_split[IMAGE_BETA]
+    return filename_split[constant.TRANSMISSION_IMAGE_INDEX], filename_split[constant.TRANSMISSION_IMAGE_A]\
+        , filename_split[constant.TRANSMISSION_IMAGE_BETA]
 
 
 class TransProducer(threading.Thread):
@@ -108,7 +100,7 @@ class TransConsumer(threading.Thread):
                 self.task_queue.put(None)
             else:
                 t = trans_get_transmission_map(task)
-                np.save(os.path.join(TRANSMISSION_DIR, task.index + '_' + str(task.a) + '_' + str(task.beta) + '.npy'), t)
+                np.save(os.path.join(constant.TRANSMISSION_TRANSMISSION_DIR, task.index + '_' + str(task.a) + '_' + str(task.beta) + '.npy'), t)
                 time.sleep(0.001)   # Sleep for 1 millisecond
         print('Consumer finish')
 
@@ -150,7 +142,7 @@ def trans_input(clear_dir, hazy_dir):
     # Add clear images into dict
     for clear_image in clear_file_list:
         file_path = os.path.join(clear_dir, clear_image)
-        clear_index = clear_image[0:di.IMAGE_INDEX_BIT]
+        clear_index = clear_image[0:constant.IMAGE_INDEX_BIT]
         CLEAR_IMAGE_DICTIONARY[clear_index] = file_path
 
     q = queue.Queue()
@@ -163,7 +155,7 @@ def trans_input(clear_dir, hazy_dir):
 
 def main():
     # Step 1, read hazy images and clear images.
-    q = trans_input(CLEAR_DIR, HAZY_DIR)
+    q = trans_input(constant.TRANSMISSION_CLEAR_DIR, constant.TRANSMISSION_HAZY_DIR)
     cpu_number = multiprocessing.cpu_count()
     # Step 2, get corresponding transmission maps and save them into directory.
     task_queue = queue.Queue()
@@ -172,7 +164,7 @@ def main():
     # Producer-Consumer Patterns
     #  Producer:Read images and generate tasks
     for producer_id in range(cpu_number):
-        producer = TransProducer(HAZY_DIR, task_queue, q)
+        producer = TransProducer(constant.TRANSMISSION_HAZY_DIR, task_queue, q)
         producer.start()
         thread_list.append(producer)
 

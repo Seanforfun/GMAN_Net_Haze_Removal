@@ -12,20 +12,6 @@ import dehazenet_multi_gpu_train as dmgt
 import dehazenet_flags as df
 
 
-RGB_CHANNEL = 3
-
-# Constants describing the training process.
-MOVING_AVERAGE_DECAY = 0.999     # The decay to use for the moving average.
-NUM_EPOCHS_PER_DECAY = 4     # Epochs after which learning rate decays.
-LEARNING_RATE_DECAY_FACTOR = 0.01  # Learning rate decay factor.
-INITIAL_LEARNING_RATE = 0.001       # Initial learning rate.
-
-# If a model is trained with multiple GPUs, prefix all Op names with tower_name
-# to differentiate the operations. Note that this prefix is removed from the
-# names of the summaries when visualizing a model.
-TOWER_NAME = 'tower'
-
-
 def main(self):
     if tf.gfile.Exists(df.FLAGS.train_dir):
         tf.gfile.DeleteRecursively(df.FLAGS.train_dir)
