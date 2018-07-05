@@ -1,9 +1,21 @@
 # !/bin/bash
 
+echo ------------------------------------------------------------------------------
+echo STEP 1: Install the environment for running dehazenet.
+echo ------------------------------------------------------------------------------
+pip3 install numpy
+pip3 install PILLOW
+pip3 install threadpool
+echo ------------------------------------------------------------------------------
+echo STEP 2: Creating directory for dehazenet
+echo ------------------------------------------------------------------------------
 CURRENT_FILE_DIR=$(cd `dirname $0`; pwd)
-PROGRAM_ROOT_PATH=/home/xiaob6/test
-if [ ! -d $PROGRAM_ROOT_PATH ];then
+# Please enter your desired root path as follow.
+PROGRAM_ROOT_PATH='/home/xiaob6/test'
+if [ ! -d '$PROGRAM_ROOT_PATH' ];then
     mkdir $PROGRAM_ROOT_PATH
+else
+	rm -rf $PROGRAM_ROOT_PATH
 fi
 cd $PROGRAM_ROOT_PATH
 echo $PROGRAM_ROOT_PATH is root directory for current project.
@@ -35,8 +47,13 @@ mkdir StatisticalResults
 echo $PROGRAM_ROOT_PATH/StatisticalResults is used to save Statistical Result for evaluating results.
 mkdir DeHazeNetModel
 echo $PROGRAM_ROOT_PATH/DeHazeNetModel is used to save training model.
-cd CURRENT_FILE_DIR
+echo ------------------------------------------------------------------------------
+echo STEP 3: Copying files to your desired root path.
+echo ------------------------------------------------------------------------------
+cd $CURRENT_FILE_DIR
 cp -rf * $PROGRAM_ROOT_PATH
 cd $PROGRAM_ROOT_PATH
 echo Please Refers to README.md for further information.
-echo Finish setup!
+echo ------------------------------------------------------------------------------
+echo Congratulations! Finish setup!
+echo ------------------------------------------------------------------------------

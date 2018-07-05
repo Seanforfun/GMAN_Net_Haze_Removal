@@ -24,6 +24,10 @@ IMAGE_INDEX_BIT = 4
 # TODO Need to change value before real operations in order to avoid memory exceeds
 NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 192780 * 2
 IMAGE_SUFFIX_MIN_LENGTH = 4
+# Load what percentage of example queue to memory
+MIN_FRACTION_OF_EXAMPLE_IN_QUEUE = 0.05
+# Number of threads used in pre-process
+NUMBER_PREPROCESS_THREADS = 8
 
 
 # dehazenet_multi_gpu_train.py
@@ -31,9 +35,12 @@ PROGRAM_START = "Program start!"
 PROGRAM_END = "Program stops!"
 
 # dehazenet_eval.py
+# Decode the name of the haze images.
 IMAGE_INDEX = 0
 IMAGE_A = 1
 IMAGE_BETA = 2
+
+SINGLE_IMAGE_NUMBER = 1
 
 # dehazenet_transmission.py
 TRANSMISSION_IMAGE_INDEX = IMAGE_INDEX

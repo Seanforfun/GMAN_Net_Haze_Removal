@@ -12,8 +12,6 @@ import tensorflow as tf
 import numpy as np
 
 import os
-import skimage.io as io
-from skimage import transform
 from PIL import Image as im
 
 from Image import *
@@ -57,27 +55,25 @@ def image_input(dir, file_names, image_list, clear_dict, clear_image):
     return file_names, image_list, clear_dict
 
 
-def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=True):
-    num_preprocess_threads = 8
-
+def _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=True, visualization=False):
     if shuffle:
         h_images, c_images = tf.train.shuffle_batch(
             [hazed_image, clear_image],
             batch_size=batch_size,
-            num_threads=num_preprocess_threads,
+            num_threads=constant.NUMBER_PREPROCESS_THREADS,
             capacity=min_queue_examples + 3 * batch_size,
             min_after_dequeue=min_queue_examples)
     else:
         h_images, c_images = tf.train.batch(
             [hazed_image, clear_image],
             batch_size=batch_size,
-            num_threads=num_preprocess_threads,
+            num_threads=constant.NUMBER_PREPROCESS_THREADS,
             capacity=min_queue_examples + 3 * batch_size
         )
 
-    # Display the training images in the visualizer.
-    tf.summary.image('hazed_images', h_images)
-    tf.summary.image('clear_images', c_images)
+    if visualization:
+        tf.summary.image('hazed_images', h_images)
+        tf.summary.image('clear_images', c_images)
     return h_images, c_images
 
 
@@ -108,67 +104,59 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
             raise ValueError('Failed to find image from path: ' + image.path)
     print('Start converting data into tfrecords...')
     writer = tf.python_io.TFRecordWriter(tfrecord_path)
-    left = 0
-    left1 = 0
-    right = 0
-    right1 = 0
-    up = 0
-    up1 = 0
-    down = 0
-    down1 = 0
-    for image in hazed_image_list:
-        try:
-            if image.image_index in test_clear_index_list:
-                continue
-            hazed_image = im.open(image.path)
-            hazed_image = hazed_image.convert("RGB")
-            shape = np.shape(hazed_image)
-            if(0 >= shape[1] - df.FLAGS.input_image_width):
-                left = 0
-                left1 = 0
-            else:
-                left = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
-                left1 = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
-            right = left + df.FLAGS.input_image_width
-            right1 = left1 + df.FLAGS.input_image_width
-            if(0 >= shape[0] - df.FLAGS.input_image_height):
-                up = 0
-                up1 = 0
-            else:
-                up = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
-                up1 = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
-            down = up + df.FLAGS.input_image_height
-            down1 = up1 + df.FLAGS.input_image_height
-            reshape_hazed_image = hazed_image.crop((left, up, right, down))
-            if np.size(np.uint8(reshape_hazed_image)) != expect_size:
-                continue
-            reshape_hazed_image1 = hazed_image.crop((left1, up1, right1, down1))
-            reshape_hazed_image_arr = np.array(reshape_hazed_image)
-            reshape_hazed_image_arr1 = np.array(reshape_hazed_image1)
-            hazed_image_raw = reshape_hazed_image_arr.tostring()
-            hazed_image_raw1 = reshape_hazed_image_arr1.tostring()
-            #################Getting corresponding clear images#########################
-            clear_image = find_corres_clear_image(image, dict)
-            reshape_clear_image = clear_image.crop((left, up, right, down))
-            if np.size(np.uint8(reshape_clear_image)) != expect_size:
-                continue
-            reshape_clear_image1 = clear_image.crop((left1, up1, right1, down1))
-            reshape_clear_image_arr = np.array(reshape_clear_image)
-            clear_image_raw = reshape_clear_image_arr.tostring()
-            reshape_clear_image_arr1 = np.array(reshape_clear_image1)
-            clear_image_raw1 = reshape_clear_image_arr1.tostring()
-            example = tf.train.Example(features=tf.train.Features(feature={
-                'hazed_image_raw': bytes_feature(hazed_image_raw),
-                'clear_image_raw': bytes_feature(clear_image_raw)}))
-            example1 = tf.train.Example(features=tf.train.Features(feature={
-                'hazed_image_raw': bytes_feature(hazed_image_raw1),
-                'clear_image_raw': bytes_feature(clear_image_raw1)}))
-            writer.write(example.SerializeToString())
-            writer.write(example1.SerializeToString())
-            counter += 1
-        except IOError as e:
-            raise RuntimeError('Could not read:', image.path)
-    writer.close()
+    try:
+        for image in hazed_image_list:
+            try:
+                if image.image_index in test_clear_index_list:
+                    continue
+                hazed_image = im.open(image.path)
+                hazed_image = hazed_image.convert("RGB")
+                shape = np.shape(hazed_image)
+                if 0 >= shape[1] - df.FLAGS.input_image_width:
+                    left1 = left = 0
+                else:
+                    left = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
+                    left1 = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
+                right = left + df.FLAGS.input_image_width
+                right1 = left1 + df.FLAGS.input_image_width
+                if 0 >= shape[0] - df.FLAGS.input_image_height:
+                    up1 = up = 0
+                else:
+                    up = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
+                    up1 = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
+                down = up + df.FLAGS.input_image_height
+                down1 = up1 + df.FLAGS.input_image_height
+                reshape_hazed_image = hazed_image.crop((left, up, right, down))
+                if np.size(np.array(reshape_hazed_image)) != expect_size:
+                    continue
+                reshape_hazed_image1 = hazed_image.crop((left1, up1, right1, down1))
+                reshape_hazed_image_arr = np.array(reshape_hazed_image)
+                reshape_hazed_image_arr1 = np.array(reshape_hazed_image1)
+                hazed_image_raw = reshape_hazed_image_arr.tostring()
+                hazed_image_raw1 = reshape_hazed_image_arr1.tostring()
+                # ################Getting corresponding clear images#########################
+                clear_image = find_corres_clear_image(image, dict)
+                reshape_clear_image = clear_image.crop((left, up, right, down))
+                if np.size(np.array(reshape_clear_image)) != expect_size:
+                    continue
+                reshape_clear_image1 = clear_image.crop((left1, up1, right1, down1))
+                reshape_clear_image_arr = np.array(reshape_clear_image)
+                clear_image_raw = reshape_clear_image_arr.tostring()
+                reshape_clear_image_arr1 = np.array(reshape_clear_image1)
+                clear_image_raw1 = reshape_clear_image_arr1.tostring()
+                example = tf.train.Example(features=tf.train.Features(feature={
+                    'hazed_image_raw': bytes_feature(hazed_image_raw),
+                    'clear_image_raw': bytes_feature(clear_image_raw)}))
+                example1 = tf.train.Example(features=tf.train.Features(feature={
+                    'hazed_image_raw': bytes_feature(hazed_image_raw1),
+                    'clear_image_raw': bytes_feature(clear_image_raw1)}))
+                writer.write(example.SerializeToString())
+                writer.write(example1.SerializeToString())
+                counter += 1
+            except IOError as e:
+                raise RuntimeError('Could not read:', image.path)
+    finally:
+        writer.close()
     print('Transform done! Totally transformed ' + str(counter * 2) + ' pairs of examples.' )
 
 
@@ -196,9 +184,8 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float16)
     else:
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float32)
-    min_fraction_of_examples_in_queue = 0.05
     min_queue_examples = int(constant.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
-                             min_fraction_of_examples_in_queue)
+                             constant.MIN_FRACTION_OF_EXAMPLE_IN_QUEUE)
     return _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=False)
 
 

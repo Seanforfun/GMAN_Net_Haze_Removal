@@ -13,16 +13,10 @@ import dehazenet_tools as dt
 import dehazenet_constant as constant
 import dehazenet_flags as df
 import numpy as np
-import skimage.io as io
-from  skimage import measure
-from skimage import transform
+from skimage import measure
 from PIL import Image as im
-import math
 from Image import *
-import cv2
-import matplotlib.image as mpimg
 
-import re
 from datetime import datetime
 import os.path
 import time
@@ -192,6 +186,7 @@ def eval_once(saver, train_op, hazed_images, clear_images, hazed_images_obj_list
             print('-------------------------------------------------------------------------------------------------------------------------------')
 
 
+@DeprecationWarning
 def evaluate_cartesian_product():
     with tf.Graph().as_default() as g:
         # A list used to save all hazed images
@@ -312,7 +307,6 @@ def evaluate_cartesian_product():
             constant.MOVING_AVERAGE_DECAY)
         variables_to_restore = variable_averages.variables_to_restore()
         saver = tf.train.Saver(variables_to_restore)
-        # TODO Zheng Liu please remove the comments of next two lines and add comment to upper five lines
         # logist = lz_net(hazed_image)
         # saver = tf.train.Saver()
         # Build the summary operation based on the TF collection of Summaries.
@@ -320,13 +314,7 @@ def evaluate_cartesian_product():
         summary_writer = tf.summary.FileWriter(df.FLAGS.eval_dir, g)
         for index in range(len(clear_image_list)):
             eval_once(saver, summary_writer, logist, summary_op, hazed_image_list, clear_image_list, haze_image_obj_list, index, hazed_image, psnr_list)
-
-        sum = 0
-        for psnr in psnr_list:
-            sum += psnr
-        psnr_avg = sum / len(psnr_list)
-        print('Average PSNR: ')
-        print(psnr_avg)
+        print('Average PSNR: ' + str(sum(psnr_list) / len(psnr_list)))
 
 
 def evaluate():
@@ -359,8 +347,7 @@ def evaluate():
             shape = np.shape(hazed_image)
             height_list.append(shape[0])
             width_list.append(shape[1])
-            hazed_image_placeholder = tf.placeholder(tf.float32,
-                                         shape=[1, shape[0], shape[1], constant.RGB_CHANNEL])
+            hazed_image_placeholder = tf.placeholder(tf.float32, shape=[constant.SINGLE_IMAGE_NUMBER, shape[0], shape[1], constant.RGB_CHANNEL])
             hazed_image_placeholder_list.append(hazed_image_placeholder)
             hazed_image_arr = np.array(hazed_image)
             float_hazed_image = hazed_image_arr.astype('float32') / 255
@@ -381,7 +368,8 @@ def evaluate():
             variables_to_restore = variable_averages.variables_to_restore()
             saver = tf.train.Saver(variables_to_restore)
             if not df.FLAGS.eval_only_haze:
-                eval_once(saver, logist, hazed_image_list, clear_image_list, _hazed_test_img_list, index, hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
+                eval_once(saver, logist, hazed_image_list, clear_image_list, _hazed_test_img_list, index,
+                          hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
             else:
                 eval_once(saver, logist, hazed_image_list, None, _hazed_test_img_list, index,
                           hazed_image_placeholder_list, psnr_list, ssim_list, height_list, width_list)
@@ -395,18 +383,15 @@ def evaluate():
             print(format_str % (datetime.now(), ssim_avg))
 
 
-def cal_average(list):
-    sum = 0
-    for num in list:
-        sum += num
-    avg = sum / len(list)
-    return avg
+def cal_average(result_list):
+    sum_psnr = sum(result_list)
+    return sum_psnr / len(result_list)
 
 
+# This function used tf.saturate_cast so it has to run in tf.session
 def write_images_to_file(logist, image, height, width, sess):
     array = np.reshape(logist[0], newshape=[height, width, constant.RGB_CHANNEL])
     array = array * 255
-    # arr1 = np.uint8(array)
     array = tf.saturate_cast(array, dtype=tf.uint8)
     arr1 = sess.run(array)
     result_image = im.fromarray(arr1, 'RGB')
