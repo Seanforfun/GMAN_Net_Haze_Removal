@@ -16,8 +16,6 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import numpy as np
-import dehazenet as dn
 import dehazenet_flags as df
 
 
@@ -225,5 +223,4 @@ def bias(bias_shape):
 
 
 if __name__ == '__main__':
-    a = tf.placeholder(tf.float32, shape=[1, 2, 3, 4]);
-    print(a.get_shape()[-1])
+    pass

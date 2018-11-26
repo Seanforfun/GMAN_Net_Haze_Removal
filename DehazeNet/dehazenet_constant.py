@@ -28,6 +28,7 @@ IMAGE_SUFFIX_MIN_LENGTH = 4
 MIN_FRACTION_OF_EXAMPLE_IN_QUEUE = 0.05
 # Number of threads used in pre-process
 NUMBER_PREPROCESS_THREADS = 8
+TRAIN_STOP_GRACE_PERIOD = 60
 
 
 # dehazenet_multi_gpu_train.py
@@ -77,3 +78,7 @@ STATS_SERIALIZATION_BAG = {}
 STATS_CLEAR_DIR = "./ClearImages/TestImages"
 STATS_RESULT_DIR = "./ClearResultImages"
 STATS_TRANSMISSION_DIR = "./ClearImages/TransImages"
+
+
+if __name__ == '__main__':
+    pass

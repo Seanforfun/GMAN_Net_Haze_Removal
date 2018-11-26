@@ -7,6 +7,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
+
 import tensorflow as tf
 import dehazenet_multi_gpu_train as dmgt
 import dehazenet_flags as df
@@ -21,7 +23,8 @@ def main(self):
             tf.gfile.Remove('./TFRecord/train.tfrecords')
             print('We delete the old TFRecord and will generate a new one in the program.')
     print('start')
-    dmgt.train()
+    image_number = len(os.listdir(df.FLAGS.haze_train_images_dir))
+    dmgt.train('./TFRecord/train.tfrecords', image_number)
     print('end')
 
 

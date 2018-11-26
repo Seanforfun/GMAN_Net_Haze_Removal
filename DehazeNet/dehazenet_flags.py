@@ -29,6 +29,8 @@ tf.app.flags.DEFINE_boolean('tfrecord_rewrite', False,
                             """Whether to delete and rewrite the TFRecord.""")
 tf.app.flags.DEFINE_string('PerceNet_dir', './PerceNetModel/vgg16.npy',
                            """Path to save the PerceNet Model""")
+tf.app.flags.DEFINE_boolean('train_restore', True,
+                            """Whether to restore the trained model.""")
 
 
 # Some systematic parameters

@@ -6,18 +6,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-import dehazenet_input as di
-import dehazenet_flags as df
-import dehazenet_tools as dt
-import numpy as np
+import os.path
 import re
 from datetime import datetime
-import os.path
-import time
-from PerceNet import *
-import dehazenet_constant as constant
 
+import dehazenet_constant as constant
+import dehazenet_input as di
+import dehazenet_tools as dt
+import dehazenet_log as logger
+from PerceNet import *
 
 # Frames used to save clear training image information
 _clear_train_file_names = []
@@ -133,7 +130,7 @@ def lz_training_net(hazed_batch):
     return x
 
 
-def loss(vgg_per, result_batch, clear_image_batch):
+def loss(result_batch, clear_image_batch):
     """
     :param result_batch: A batch of image that been processed by out CNN
     :param clear_image_batch: The ground truth image to compare with result_batch
@@ -166,7 +163,7 @@ def loss(vgg_per, result_batch, clear_image_batch):
     return tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 
-def tower_loss(vgg_per, scope, hazed_batch, clear_batch):
+def tower_loss(scope, hazed_batch, clear_batch):
     """Calculate the total loss on a single tower running the DeHazeNet model.
 
       Args:
@@ -181,7 +178,7 @@ def tower_loss(vgg_per, scope, hazed_batch, clear_batch):
     # logist = inference(hazed_batch)
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
-    _ = loss(vgg_per, logist, clear_batch)
+    _ = loss(logist, clear_batch)
     # Assemble all of the losses for the current tower only.
     losses = tf.get_collection('losses', scope)
     # Calculate the total loss for the current tower.
@@ -235,10 +232,10 @@ def average_gradients(tower_grads):
     return average_grads
 
 
-def train():
-    print(constant.PROGRAM_START)
+def train(tf_record_path, image_number):
+    logger.info("Training on: %s" % tf_record_path)
     # Create all dehazenet information in /cpu:0
-    with tf.Graph().as_default(), tf.device('/cpu:0'):
+    with tf.Graph().as_default():
         # Create a variable to count the number of train() calls. This equals the
         # number of batches processed * FLAGS.num_gpus.
         global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
@@ -276,12 +273,12 @@ def train():
             # Write data into a TFRecord saved in path ./TFRecord
             di.convert_to_tfrecord(_hazed_train_img_list, _hazed_train_file_names, _clear_train_directory,
                                    df.FLAGS.input_image_height, df.FLAGS.input_image_width, df.FLAGS.tfrecord_path, _clear_test_img_list)
-        hazed_image, clear_image = di.read_tfrecords_and_add_2_queue(df.FLAGS.tfrecord_path, df.FLAGS.batch_size,
+        hazed_image, clear_image = di.read_tfrecords_and_add_2_queue(tf_record_path, df.FLAGS.batch_size,
                                                                      df.FLAGS.input_image_height, df.FLAGS.input_image_width)
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [hazed_image, clear_image], capacity=2 * df.FLAGS.num_gpus)
         # Calculate the gradients for each model tower.
-        vgg_per = Vgg16()
+        # vgg_per = Vgg16()
         tower_grads = []
         with tf.variable_scope(tf.get_variable_scope()):
             for i in range(df.FLAGS.num_gpus):
@@ -292,7 +289,7 @@ def train():
                         # Calculate the loss for one tower of the dehazenet model. This function
                         # constructs the entire dehazenet model but shares the variables across
                         # all towers.
-                        loss, _ = tower_loss(vgg_per, scope, hazed_image_batch, clear_image_batch)
+                        loss, _ = tower_loss(scope, hazed_image_batch, clear_image_batch)
 
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
@@ -345,12 +342,20 @@ def train():
             log_device_placement=df.FLAGS.log_device_placement))
         sess.run(init)
 
+        # Restore previous trained model
+        if df.FLAGS.train_restore:
+            dehazenet_ckpt = tf.train.get_checkpoint_state(df.FLAGS.train_dir)
+            if dehazenet_ckpt and dehazenet_ckpt.model_checkpoint_path:
+                # Restores from checkpoint
+                saver.restore(sess, dehazenet_ckpt.model_checkpoint_path)
+
+        coord = tf.train.Coordinator()
         # Start the queue runners.
-        tf.train.start_queue_runners(sess=sess)
+        queue_runners = tf.train.start_queue_runners(sess=sess, coord=coord, daemon=False)
 
         summary_writer = tf.summary.FileWriter(df.FLAGS.train_dir, sess.graph)
 
-        for step in range(df.FLAGS.max_steps):
+        for step in range(image_number / df.FLAGS.batch_size):
             start_time = time.time()
             _, loss_value = sess.run([train_op, loss])
             duration = time.time() - start_time
@@ -375,6 +380,10 @@ def train():
             if step % 1000 == 0 or (step + 1) == df.FLAGS.max_steps:
                 checkpoint_path = os.path.join(df.FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
+
+        coord.request_stop()
+        sess.close()
+        coord.join(queue_runners, stop_grace_period_secs=constant.TRAIN_STOP_GRACE_PERIOD, ignore_live_threads=True)
     print(constant.PROGRAM_END)
 
 
