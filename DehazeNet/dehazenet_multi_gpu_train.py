@@ -14,6 +14,7 @@ import dehazenet_constant as constant
 import dehazenet_input as di
 import dehazenet_tools as dt
 import dehazenet_log as logger
+import dehazenet_config as dc
 from PerceNet import *
 
 # Frames used to save clear training image information
@@ -130,6 +131,15 @@ def lz_training_net(hazed_batch):
     return x
 
 
+def train_load_previous_model(path, saver, sess, init=None):
+    gmean_ckpt = tf.train.get_checkpoint_state(path)
+    if gmean_ckpt and gmean_ckpt.model_checkpoint_path:
+        # Restores from checkpoint
+        saver.restore(sess, gmean_ckpt.model_checkpoint_path)
+    else:
+        sess.run(init)
+
+
 def loss(result_batch, clear_image_batch):
     """
     :param result_batch: A batch of image that been processed by out CNN
@@ -232,8 +242,9 @@ def average_gradients(tower_grads):
     return average_grads
 
 
-def train(tf_record_path, image_number):
+def train(tf_record_path, image_number, config):
     logger.info("Training on: %s" % tf_record_path)
+    tf.reset_default_graph()
     # Create all dehazenet information in /cpu:0
     with tf.Graph().as_default():
         # Create a variable to count the number of train() calls. This equals the
@@ -340,14 +351,12 @@ def train(tf_record_path, image_number):
         sess = tf.Session(config=tf.ConfigProto(
             allow_soft_placement=True,
             log_device_placement=df.FLAGS.log_device_placement))
-        sess.run(init)
 
         # Restore previous trained model
-        if df.FLAGS.train_restore:
-            dehazenet_ckpt = tf.train.get_checkpoint_state(df.FLAGS.train_dir)
-            if dehazenet_ckpt and dehazenet_ckpt.model_checkpoint_path:
-                # Restores from checkpoint
-                saver.restore(sess, dehazenet_ckpt.model_checkpoint_path)
+        if config[dc.CONFIG_TRAINING_TRAIN_RESTORE]:
+            train_load_previous_model(df.FLAGS.train_dir, saver, sess)
+        else:
+            sess.run(init)
 
         coord = tf.train.Coordinator()
         # Start the queue runners.
@@ -355,7 +364,8 @@ def train(tf_record_path, image_number):
 
         summary_writer = tf.summary.FileWriter(df.FLAGS.train_dir, sess.graph)
 
-        for step in range(image_number / df.FLAGS.batch_size):
+        # For each tf-record, we train them twice.
+        for step in range((image_number / df.FLAGS.batch_size) * 2):
             start_time = time.time()
             _, loss_value = sess.run([train_op, loss])
             duration = time.time() - start_time
@@ -377,7 +387,7 @@ def train(tf_record_path, image_number):
                 summary_writer.add_summary(summary_str, step)
 
             # Save the model checkpoint periodically.
-            if step % 1000 == 0 or (step + 1) == df.FLAGS.max_steps:
+            if step != 0 and (step % 1000 == 0 or (step + 1) == df.FLAGS.max_steps):
                 checkpoint_path = os.path.join(df.FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
 

@@ -13,10 +13,12 @@ import numpy as np
 
 import os
 from PIL import Image as im
+import json
 
 from Image import *
 import dehazenet_flags as df
 import dehazenet_constant as constant
+import  dehazenet_log as logger
 
 
 def image_list_shuffle(image_list):
@@ -187,6 +189,113 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
     min_queue_examples = int(constant.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              constant.MIN_FRACTION_OF_EXAMPLE_IN_QUEUE)
     return _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=False)
+
+
+# ####################################################################################
+# #################################Json file operations for tf-records########################
+# ####################################################################################
+def input_create_tfrecord_json():
+    tfrecord_status_file = open(df.FLAGS.tfrecord_json, "w")
+    try:
+        # create dictionary for tf-record names
+        # key(String): name of tf-record : value(Boolean): if existing
+        tfrecord_existing_dict = {"tfrecord_status": {}}
+        # {filename-0.tfrecords : False ...  filename-max_epoch-1.tfrecords : False}
+        for index in range(500):
+            tfrecord_existing_dict["tfrecord_status"][
+                df.FLAGS.tfrecord_format % index] = constant.INPUT_TFRECORD_NOT_COMPLETE
+        json.dump(tfrecord_existing_dict, tfrecord_status_file)
+        logger.info("Create Json file for record tf-record.")
+    except IOError as err:
+        raise RuntimeError("[Error]: Error happens when read/write " + df.FLAGS.tfrecord_json + ".")
+    finally:
+        tfrecord_status_file.close()
+    return tfrecord_existing_dict
+
+
+def input_load_existing_tfrecords():
+    if not os.path.exists(df.FLAGS.tfrecord_json):
+        tfrecord_existing_dict = input_create_tfrecord_json()
+    else:
+        # File exist, we need to load the json object
+        tfrecord_status_file = open(df.FLAGS.tfrecord_json, "r")
+        try:
+            tfrecord_existing_dict = json.load(tfrecord_status_file)
+        except IOError as err:
+            raise RuntimeError("[Error]: Error happens when read/write " + df.FLAGS.tfrecord_json + ".")
+        finally:
+            tfrecord_status_file.close()
+    return tfrecord_existing_dict["tfrecord_status"]
+
+
+# ####################################################################################
+# #######################Json file operations for model training control########################
+# ####################################################################################
+def input_create_flow_control_json():
+    # Current json file doesn't exist
+    flow_control_file = open(df.FLAGS.train_json_path, "w")
+    try:
+        flow_control = {'train_flow_control': []}
+        json.dump(flow_control, flow_control_file)
+        logger.info("Create Json file for training flow control.")
+    except IOError as err:
+        raise RuntimeError("[Error]: Error happens when read/write " + df.FLAGS.train_json_path + ".")
+    finally:
+        flow_control_file.close()
+    return flow_control
+
+
+def input_load_flow_control_json():
+    if not os.path.exists(df.FLAGS.train_json_path):
+        flow_control = input_create_flow_control_json()
+    else:
+        # File exist, we need to load the json object
+        flow_control_json_file = open(df.FLAGS.train_json_path, "r")
+        try:
+            flow_control = json.load(flow_control_json_file)
+        except IOError as err:
+            raise RuntimeError("[Error]: Error happens when read/write " + df.FLAGS.train_json_path + ".")
+        finally:
+            flow_control_json_file.close()
+    return flow_control["train_flow_control"]
+
+
+def input_modify_flow_control_json(train_flow_control_json, finished_tfrecord):
+    train_flow_control_json_file = open(train_flow_control_json, "r")
+    try:
+        json_data = json.load(train_flow_control_json_file)
+    except IOError:
+        raise RuntimeError("[Error]: Error happens when read/write " + train_flow_control_json + ".")
+    finally:
+        train_flow_control_json_file.close()
+    previous_trained = json_data["train_flow_control"]
+    assert not previous_trained.__contains__(finished_tfrecord), "[Error]: Trained tf-record was trained again!"
+    previous_trained.append(finished_tfrecord)
+    # Save updated data into json file
+    train_flow_control_json_file = open(train_flow_control_json, "w")
+    try:
+        json.dump(json_data, train_flow_control_json_file)
+    except IOError:
+        raise RuntimeError("[Error]: Error happens when read/write " + train_flow_control_json + ".")
+    finally:
+        train_flow_control_json_file.close()
+
+
+# ####################################################################################
+# ##########################Parse tf-record for traininig####################################
+# ####################################################################################
+def input_parse_tfrecord_index(name):
+    name, _ = os.path.splitext(name)
+    return int(name.split('-')[constant.INPUT_TFRECORD_INDEX_POSITION])
+
+
+def input_parse_tfrecord_for_training(tfrecord_map, trained_model_list, queue):
+    trained_model_number = len(trained_model_list)
+    last_finished = trained_model_list[trained_model_number - 1]
+    last_index = input_parse_tfrecord_index(last_finished)
+    for index in range(last_index + 1, df.FLAGS.max_epoch):
+        if tfrecord_map[df.FLAGS.tfrecord_format % index] == constant.INPUT_TFRECORD_COMPLETE:
+            queue.put(os.path.join(df.FLAGS.tfrecord_path, df.FLAGS.tfrecord_format % index))
 
 
 if __name__ == '__main__':
