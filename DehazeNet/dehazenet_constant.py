@@ -36,6 +36,7 @@ INPUT_TFRECORD_REMOVED = "REMOVED"
 
 INPUT_TFRECORD_INDEX_POSITION = 1
 
+ONE_SECOND = 1
 
 # dehazenet_multi_gpu_train.py
 PROGRAM_START = "Program start!"

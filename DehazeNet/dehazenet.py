@@ -10,12 +10,14 @@ from __future__ import print_function
 import os
 import threading
 import queue
+import time
 
 import tensorflow as tf
 import dehazenet_multi_gpu_train as dmgt
 import dehazenet_flags as df
 import dehazenet_input as di
 import dehazenet_config as dc
+import dehazenet_constant as constant
 
 
 class TrainProducer(threading.Thread):
@@ -47,6 +49,7 @@ class TrainConsumer(threading.Thread):
             dmgt.train(tfrecord_to_train, self.image_number, config)
             di.input_modify_flow_control_json(df.FLAGS.train_json_path ,tfrecord_to_train)
             dc.config_update_config(config)
+            time.sleep(constant.ONE_SECOND * 60)
 
 
 def main(self):
@@ -59,7 +62,11 @@ def main(self):
             print('We delete the old TFRecord and will generate a new one in the program.')
     image_number = len(os.listdir(df.FLAGS.haze_train_images_dir))
     q = queue.Queue()
-    dmgt.train('./TFRecord/train.tfrecords', image_number)
+    gmean_producer = TrainProducer(q)
+    gmean_producer.start()
+    time.sleep(constant.ONE_SECOND *10)
+    gmean_consumer = TrainConsumer(q, image_number)
+    gmean_consumer.start()
 
 
 if __name__ == '__main__':

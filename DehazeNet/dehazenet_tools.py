@@ -30,9 +30,9 @@ def _variable_on_cpu(name, shape, initializer):
     Returns:
     Variable Tensor
     """
-    with tf.device('/cpu:0'):
-        dtype = tf.float16 if df.FLAGS.use_fp16 else tf.float32
-        var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
+    # with tf.device('/cpu:0'):
+    dtype = tf.float16 if df.FLAGS.use_fp16 else tf.float32
+    var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
     return var
 
 
