@@ -41,6 +41,9 @@ ONE_SECOND = 1
 # gman_train.py
 PROGRAM_START = "Program start!"
 PROGRAM_END = "Program stops!"
+TRAIN_GPU_MEMORY_ALLOW_GROWTH = False
+TRAIN_GPU_MEMORY_FRACTION = 1
+TRAIN_VISIBLE_GPU_LIST = "0, 1, 2, 3"
 
 # gman_eval.py
 # Decode the name of the haze images.

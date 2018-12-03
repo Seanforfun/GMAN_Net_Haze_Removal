@@ -18,6 +18,7 @@ import gman_log as logger
 import gman_config as dc
 import gman_net as net
 import gman_model as model
+import gman_tower as tower
 from PerceNet import *
 
 
@@ -156,37 +157,19 @@ def train(tf_record_path, image_number, config):
         opt = tf.train.AdamOptimizer(lr)
         # opt = tf.train.GradientDescentOptimizer(lr)
 
-        hazed_image, clear_image = di.read_tfrecords_and_add_2_queue(tf_record_path, df.FLAGS.batch_size,
-                                                                     df.FLAGS.input_image_height, df.FLAGS.input_image_width)
-        batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-            [hazed_image, clear_image], capacity=2 * df.FLAGS.num_gpus)
+        batch_queue = di.input_get_queue_from_tfrecord(tf_record_path, df.FLAGS.batch_size,
+                                                       df.FLAGS.input_image_height, df.FLAGS.input_image_width)
         # Calculate the gradients for each model tower.
         # vgg_per = Vgg16()
         tower_grads = []
         with tf.variable_scope(tf.get_variable_scope()):
-            gmean_model = model.GMEAN()
-            gmean_net = net.Net(gmean_model)
+            gman_model = model.GMEAN()
+            gman_net = net.Net(gman_model)
             for i in range(df.FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
                     with tf.name_scope('%s_%d' % (constant.TOWER_NAME, i)) as scope:
-                        # Dequeues one batch for the GPU
-                        hazed_image_batch, clear_image_batch = batch_queue.dequeue()
-                        # Calculate the loss for one tower of the dehazenet model. This function
-                        # constructs the entire dehazenet model but shares the variables across
-                        # all towers.
-                        loss, _ = tower_loss(gmean_net, scope, hazed_image_batch, clear_image_batch)
-
-                        # Reuse variables for the next tower.
-                        tf.get_variable_scope().reuse_variables()
-
-                        # Retain the summaries from the final tower.
-                        summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
-
-                        # Calculate the gradients for the batch of data on this CIFAR tower.
-                        grads = opt.compute_gradients(loss)
-
-                        # Keep track of the gradients across all towers.
-                        tower_grads.append(grads)
+                        gman_tower = tower.GMEAN_Tower(gman_net, batch_queue, scope, tower_grads, opt)
+                        summaries = gman_tower.process()
 
         # We must calculate the mean of each gradient. Note that this is the
         # synchronization point across all towers.
@@ -224,7 +207,11 @@ def train(tf_record_path, image_number, config):
         # implementations.
         sess = tf.Session(config=tf.ConfigProto(
             allow_soft_placement=True,
-            log_device_placement=df.FLAGS.log_device_placement))
+            log_device_placement=df.FLAGS.log_device_placement,
+            gpu_options=tf.GPUOptions(allow_growth=constant.TRAIN_GPU_MEMORY_ALLOW_GROWTH,
+                                      per_process_gpu_memory_fraction=constant.TRAIN_GPU_MEMORY_FRACTION,
+                                      visible_device_list=constant.TRAIN_VISIBLE_GPU_LIST))
+        )
 
         # Restore previous trained model
         if config[dc.CONFIG_TRAINING_TRAIN_RESTORE]:
@@ -256,7 +243,7 @@ def train(tf_record_path, image_number, config):
                 print(format_str % (datetime.now(), step, loss_value,
                                     examples_per_sec, sec_per_batch))
 
-            if step % 100 == 0:
+            if step % 1000 == 0:
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, step)
 

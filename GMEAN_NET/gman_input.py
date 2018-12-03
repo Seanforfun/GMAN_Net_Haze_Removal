@@ -191,6 +191,10 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
     return _generate_image_batch(hazed_image, clear_image, min_queue_examples, batch_size, shuffle=False)
 
 
+def input_get_queue_from_tfrecord(tfrecords_filename, batch_size, height, width):
+    raw_data = read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width)
+    return tf.contrib.slim.prefetch_queue.prefetch_queue(list(raw_data), capacity=2 * df.FLAGS.num_gpus)
+
 # ####################################################################################
 # #################################Json file operations for tf-records########################
 # ####################################################################################

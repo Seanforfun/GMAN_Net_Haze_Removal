@@ -64,7 +64,7 @@ def main(self):
     q = queue.Queue()
     gmean_producer = TrainProducer(q)
     gmean_producer.start()
-    time.sleep(constant.ONE_SECOND *10)
+    time.sleep(constant.ONE_SECOND * 10)
     gmean_consumer = TrainConsumer(q, image_number)
     gmean_consumer.start()
 
