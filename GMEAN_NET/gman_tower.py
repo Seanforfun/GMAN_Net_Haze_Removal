@@ -123,7 +123,7 @@ class GMEAN_Tower(Tower):
 
         # Keep track of the gradients across all towers.
         self.tower_grades.append(grads)
-        return summaries
+        return summaries, loss
 
 
 if __name__ == '__main__':
