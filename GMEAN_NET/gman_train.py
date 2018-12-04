@@ -99,7 +99,7 @@ def train(tf_record_path, image_number, config):
         # vgg_per = Vgg16()
         tower_grads = []
         with tf.variable_scope(tf.get_variable_scope()):
-            gman_model = model.GMEAN()
+            gman_model = model.GMAN_V1()
             gman_net = net.Net(gman_model)
             for i in range(df.FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
