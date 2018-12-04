@@ -28,7 +28,7 @@ class TrainProducer(threading.Thread):
     def run(self):
         # json file doesn't exist, we create a new one
         if not tf.gfile.Exists(df.FLAGS.tfrecord_json):
-            di.input_create_tfrecord_json()
+            tfrecord_status = di.input_create_tfrecord_json()
             di.input_create_flow_control_json()
         else:
             tfrecord_status = di.input_load_existing_tfrecords()
@@ -61,12 +61,17 @@ def main(self):
             tf.gfile.Remove('./TFRecord/train.tfrecords')
             print('We delete the old TFRecord and will generate a new one in the program.')
     image_number = len(os.listdir(df.FLAGS.haze_train_images_dir))
+    thread_list = []
     q = queue.Queue()
-    gmean_producer = TrainProducer(q)
-    gmean_producer.start()
+    gman_producer = TrainProducer(q)
+    thread_list.append(gman_producer)
+    gman_producer.start()
     time.sleep(constant.ONE_SECOND * 10)
-    gmean_consumer = TrainConsumer(q, image_number)
-    gmean_consumer.start()
+    gman_consumer = TrainConsumer(q, image_number)
+    gman_consumer.start()
+    thread_list.append(gman_consumer)
+    for thread in thread_list:
+        thread.join()
 
 
 if __name__ == '__main__':

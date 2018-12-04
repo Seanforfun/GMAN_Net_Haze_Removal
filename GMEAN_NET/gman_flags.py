@@ -23,9 +23,7 @@ tf.app.flags.DEFINE_string('haze_train_images_dir', './HazeImages/TrainImages',
                            """Path to the hazed train images directory.""")
 tf.app.flags.DEFINE_string('clear_train_images_dir', './ClearImages/TrainImages',
                            """Path to the clear train images directory.""")
-tf.app.flags.DEFINE_string('tfrecord_path', './TFRecord/train.tfrecords',
-                           """Path to save the TFRecord of the images""")
-tf.app.flags.DEFINE_string('tfrecord_format', 'gmean-%d.tfrecords',
+tf.app.flags.DEFINE_string('tfrecord_format', 'gman-%d.tfrecords',
                            """Format of tf-records, file name must end with -index_number.""")
 tf.app.flags.DEFINE_string('tfrecord_json', './TFRecord/tfrecords.json',
                            """Json file to save the status of tfrecords.""")
@@ -35,7 +33,7 @@ tf.app.flags.DEFINE_boolean('tfrecord_rewrite', False,
                             """Whether to delete and rewrite the TFRecord.""")
 tf.app.flags.DEFINE_string('PerceNet_dir', './PerceNetModel/vgg16.npy',
                            """Path to save the PerceNet Model""")
-tf.app.flags.DEFINE_boolean('train_restore', True,
+tf.app.flags.DEFINE_boolean('train_restore', False,
                             """Whether to restore the trained model.""")
 tf.app.flags.DEFINE_string('train_json_path', './DeHazeNetModel/trainFlowControl.json',
                            """Path to save training status json file.""")
@@ -49,7 +47,7 @@ tf.app.flags.DEFINE_string('train_dir', './DeHazeNetModel',
                            """and checkpoint.""")
 tf.app.flags.DEFINE_integer('max_steps', 19990000,
                             """Number of batches to run.""")
-tf.app.flags.DEFINE_integer('num_gpus', 2,
+tf.app.flags.DEFINE_integer('num_gpus', 4,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")

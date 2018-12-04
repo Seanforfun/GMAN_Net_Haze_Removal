@@ -7,17 +7,14 @@ from __future__ import division
 from __future__ import print_function
 
 import os.path
-import re
 from datetime import datetime
-import abc
 
+import gman_config as dc
 import gman_constant as constant
 import gman_input as di
-import gman_tools as dt
 import gman_log as logger
-import gman_config as dc
-import gman_net as net
 import gman_model as model
+import gman_net as net
 import gman_tower as tower
 from PerceNet import *
 
@@ -162,7 +159,7 @@ def train(tf_record_path, image_number, config):
         summary_writer = tf.summary.FileWriter(df.FLAGS.train_dir, sess.graph)
 
         # For each tf-record, we train them twice.
-        for step in range((image_number / df.FLAGS.batch_size) * 2):
+        for step in range(int((image_number / df.FLAGS.batch_size) * 2)):
             start_time = time.time()
             _, loss_value = sess.run([train_op, loss])
             duration = time.time() - start_time

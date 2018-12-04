@@ -195,10 +195,12 @@ def input_get_queue_from_tfrecord(tfrecords_filename, batch_size, height, width)
     raw_data = read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width)
     return tf.contrib.slim.prefetch_queue.prefetch_queue(list(raw_data), capacity=2 * df.FLAGS.num_gpus)
 
+
 # ####################################################################################
 # #################################Json file operations for tf-records########################
 # ####################################################################################
 def input_create_tfrecord_json():
+    tfrecord_list = os.listdir(df.FLAGS.tfrecord_path)
     tfrecord_status_file = open(df.FLAGS.tfrecord_json, "w")
     try:
         # create dictionary for tf-record names
@@ -206,8 +208,11 @@ def input_create_tfrecord_json():
         tfrecord_existing_dict = {"tfrecord_status": {}}
         # {filename-0.tfrecords : False ...  filename-max_epoch-1.tfrecords : False}
         for index in range(500):
-            tfrecord_existing_dict["tfrecord_status"][
-                df.FLAGS.tfrecord_format % index] = constant.INPUT_TFRECORD_NOT_COMPLETE
+            tfrecord_name = df.FLAGS.tfrecord_format % index
+            if tfrecord_list.__contains__(tfrecord_name):
+                tfrecord_existing_dict["tfrecord_status"][tfrecord_name] = constant.INPUT_TFRECORD_COMPLETE
+            else:
+                tfrecord_existing_dict["tfrecord_status"][tfrecord_name] = constant.INPUT_TFRECORD_NOT_COMPLETE
         json.dump(tfrecord_existing_dict, tfrecord_status_file)
         logger.info("Create Json file for record tf-record.")
     except IOError as err:
@@ -246,7 +251,7 @@ def input_create_flow_control_json():
         raise RuntimeError("[Error]: Error happens when read/write " + df.FLAGS.train_json_path + ".")
     finally:
         flow_control_file.close()
-    return flow_control
+    return flow_control["train_flow_control"]
 
 
 def input_load_flow_control_json():
@@ -256,12 +261,13 @@ def input_load_flow_control_json():
         # File exist, we need to load the json object
         flow_control_json_file = open(df.FLAGS.train_json_path, "r")
         try:
-            flow_control = json.load(flow_control_json_file)
+            flow_control_map = json.load(flow_control_json_file)
+            flow_control = flow_control_map["train_flow_control"]
         except IOError as err:
             raise RuntimeError("[Error]: Error happens when read/write " + df.FLAGS.train_json_path + ".")
         finally:
             flow_control_json_file.close()
-    return flow_control["train_flow_control"]
+    return flow_control
 
 
 def input_modify_flow_control_json(train_flow_control_json, finished_tfrecord):
@@ -295,9 +301,12 @@ def input_parse_tfrecord_index(name):
 
 def input_parse_tfrecord_for_training(tfrecord_map, trained_model_list, queue):
     trained_model_number = len(trained_model_list)
-    last_finished = trained_model_list[trained_model_number - 1]
-    last_index = input_parse_tfrecord_index(last_finished)
-    for index in range(last_index + 1, df.FLAGS.max_epoch):
+    if trained_model_number == 0:
+        next_index = 0
+    else:
+        last_finished = trained_model_list[trained_model_number - 1]
+        next_index = input_parse_tfrecord_index(last_finished) + 1
+    for index in range(next_index, df.FLAGS.max_epoch):
         if tfrecord_map[df.FLAGS.tfrecord_format % index] == constant.INPUT_TFRECORD_COMPLETE:
             queue.put(os.path.join(df.FLAGS.tfrecord_path, df.FLAGS.tfrecord_format % index))
 

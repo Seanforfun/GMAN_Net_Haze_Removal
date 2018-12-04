@@ -21,8 +21,6 @@ _clear_test_directory = {}
 
 
 def tfrecord_create_tf_record(path):
-    di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _clear_test_img_list,
-                   clear_dict=_clear_test_directory, clear_image=True)
     di.image_input(df.FLAGS.clear_train_images_dir, _clear_train_file_names, _clear_train_img_list,
                    _clear_train_directory, clear_image=True)
     if len(_clear_train_img_list) == 0:
@@ -38,5 +36,6 @@ def tfrecord_create_tf_record(path):
                            df.FLAGS.input_image_height, df.FLAGS.input_image_width, path,
                            _clear_test_img_list)
 
+
 if __name__ == '__main__':
-    pass
+    tfrecord_create_tf_record("")
