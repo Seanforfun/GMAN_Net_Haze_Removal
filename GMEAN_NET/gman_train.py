@@ -16,6 +16,7 @@ import gman_log as logger
 import gman_model as model
 import gman_net as net
 import gman_tower as tower
+import gman_learningrate as learning_rate
 from PerceNet import *
 
 
@@ -26,44 +27,6 @@ def train_load_previous_model(path, saver, sess, init=None):
         saver.restore(sess, gmean_ckpt.model_checkpoint_path)
     else:
         sess.run(init)
-
-
-def average_gradients(tower_grads):
-    """Calculate the average gradient for each shared variable across all towers.
-
-     Note that this function provides a synchronization point across all towers.
-
-     Args:
-       tower_grads: List of lists of (gradient, variable) tuples. The outer list
-         is over individual gradients. The inner list is over the gradient
-         calculation for each tower.
-     Returns:
-        List of pairs of (gradient, variable) where the gradient has been averaged
-        across all towers.
-     """
-    average_grads = []
-    for grad_and_vars in zip(*tower_grads):
-        # Note that each grad_and_vars looks like the following:
-        #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
-        grads = []
-        for g, _ in grad_and_vars:
-            # Add 0 dimension to the gradients to represent the tower.
-            expanded_g = tf.expand_dims(g, 0)
-
-            # Append on a 'tower' dimension which we will average over below.
-            grads.append(expanded_g)
-
-        # Average over the 'tower' dimension.
-        grad = tf.concat(axis=0, values=grads)
-        grad = tf.reduce_mean(grad, 0)
-
-        # Keep in mind that the Variables are redundant because they are shared
-        # across towers. So .. we will just return the first tower's pointer to
-        # the Variable.
-        v = grad_and_vars[0][1]
-        grad_and_var = (grad, v)
-        average_grads.append(grad_and_var)
-    return average_grads
 
 
 def train(tf_record_path, image_number, config):
@@ -80,10 +43,11 @@ def train(tf_record_path, image_number, config):
                                  df.FLAGS.batch_size)
         decay_steps = int(num_batches_per_epoch * constant.NUM_EPOCHS_PER_DECAY)
 
-        lr = tf.train.exponential_decay(constant.INITIAL_LEARNING_RATE,
+        initial_learning_rate = learning_rate.LearningRate(constant.INITIAL_LEARNING_RATE, df.FLAGS.train_learning_rate)
+        lr = tf.train.exponential_decay(initial_learning_rate.load(),
                                         global_step,
                                         decay_steps,
-                                        constant.LEARNING_RATE_DECAY_FACTOR,
+                                        initial_learning_rate.decay_factor,
                                         staircase=True)
 
         # Create an optimizer that performs gradient descent.
@@ -106,7 +70,7 @@ def train(tf_record_path, image_number, config):
 
         # We must calculate the mean of each gradient. Note that this is the
         # synchronization point across all towers.
-        grads = average_gradients(tower_grads)
+        grads = tower.average_gradients(tower_grads)
         # Add a summary to track the learning rate.
         summaries.append(tf.summary.scalar('learning_rate', lr))
 
@@ -157,11 +121,14 @@ def train(tf_record_path, image_number, config):
         queue_runners = tf.train.start_queue_runners(sess=sess, coord=coord, daemon=False)
 
         summary_writer = tf.summary.FileWriter(df.FLAGS.train_dir, sess.graph)
-
+        max_step = int((image_number / df.FLAGS.batch_size) * 2)
         # For each tf-record, we train them twice.
-        for step in range(int((image_number / df.FLAGS.batch_size) * 2)):
+        for step in range(max_step):
             start_time = time.time()
-            _, loss_value = sess.run([train_op, loss])
+            if step != 0 and (step % 1000 == 0 or (step + 1) == max_step):
+                _, loss_value, current_learning_rate = sess.run([train_op, loss, lr])
+            else:
+                _, loss_value = sess.run([train_op, loss])
             duration = time.time() - start_time
 
             assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
@@ -181,9 +148,10 @@ def train(tf_record_path, image_number, config):
                 summary_writer.add_summary(summary_str, step)
 
             # Save the model checkpoint periodically.
-            if step != 0 and (step % 1000 == 0 or (step + 1) == df.FLAGS.max_steps):
+            if step != 0 and (step % 1000 == 0 or (step + 1) == max_step):
                 checkpoint_path = os.path.join(df.FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
+                initial_learning_rate.save(current_learning_rate)
 
         coord.request_stop()
         sess.close()

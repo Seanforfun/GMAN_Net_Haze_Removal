@@ -33,12 +33,14 @@ tf.app.flags.DEFINE_boolean('tfrecord_rewrite', False,
                             """Whether to delete and rewrite the TFRecord.""")
 tf.app.flags.DEFINE_string('PerceNet_dir', './PerceNetModel/vgg16.npy',
                            """Path to save the PerceNet Model""")
-tf.app.flags.DEFINE_boolean('train_restore', False,
+tf.app.flags.DEFINE_boolean('train_restore', True,
                             """Whether to restore the trained model.""")
 tf.app.flags.DEFINE_string('train_json_path', './DeHazeNetModel/trainFlowControl.json',
                            """Path to save training status json file.""")
 tf.app.flags.DEFINE_integer('max_epoch', 500,
                             """Max epoch number for training.""")
+tf.app.flags.DEFINE_string('train_learning_rate', './DeHazeNetModel/trainLearningRate.json',
+                           """Path to save training learning rate json file.""")
 
 
 # Some systematic parameters
