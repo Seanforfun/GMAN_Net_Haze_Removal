@@ -12,6 +12,7 @@ import threading
 import queue
 import time
 import tensorflow as tf
+import threading
 
 import gman_train as dmgt
 import gman_flags as df
@@ -53,15 +54,12 @@ class TrainConsumer(threading.Thread):
 
 
 def main(self):
-    if tf.gfile.Exists(df.FLAGS.train_dir):
-        tf.gfile.DeleteRecursively(df.FLAGS.train_dir)
-    tf.gfile.MakeDirs(df.FLAGS.train_dir)
-    if df.FLAGS.tfrecord_rewrite:
-        if tf.gfile.Exists('./TFRecord/train.tfrecords'):
-            tf.gfile.Remove('./TFRecord/train.tfrecords')
-            print('We delete the old TFRecord and will generate a new one in the program.')
     image_number = len(os.listdir(df.FLAGS.haze_train_images_dir))
     thread_list = []
+    daemon = threading.Thread(name='GMEAN_Daemon', daemon=True)
+    thread_list.append(daemon)
+    daemon.start()
+    image_number = len(os.listdir(df.FLAGS.haze_train_images_dir))
     q = queue.Queue()
     gman_producer = TrainProducer(q)
     thread_list.append(gman_producer)

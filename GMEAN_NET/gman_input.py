@@ -176,15 +176,18 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
         })
     hazed_image = tf.decode_raw(img_features['hazed_image_raw'], tf.uint8)
     hazed_image = tf.reshape(hazed_image, [height, width, 3])
-    if df.FLAGS.use_fp16:
-        hazed_image = tf.image.convert_image_dtype(hazed_image, tf.float16)
-    else:
-        hazed_image = tf.image.convert_image_dtype(hazed_image, tf.float32)
     clear_image = tf.decode_raw(img_features['clear_image_raw'], tf.uint8)
     clear_image = tf.reshape(clear_image, [height, width, 3])
+    # stack the haze and clear images on channel axis
+    composed_images = tf.stack([hazed_image, clear_image], axis=2)
+    croped_composed_images = tf.random_crop(composed_images, [df.FLAGS.input_image_height, df.FLAGS.input_image_width, 6])
+    hazed_image = croped_composed_images[:, :, :3]
+    clear_image = croped_composed_images[:, :, 3:]
     if df.FLAGS.use_fp16:
+        hazed_image = tf.image.convert_image_dtype(hazed_image, tf.float16)
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float16)
     else:
+        hazed_image = tf.image.convert_image_dtype(hazed_image, tf.float32)
         clear_image = tf.image.convert_image_dtype(clear_image, tf.float32)
     min_queue_examples = int(constant.NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *
                              constant.MIN_FRACTION_OF_EXAMPLE_IN_QUEUE)
