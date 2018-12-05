@@ -92,8 +92,11 @@ def bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
+def int64_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+
 def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, width, tfrecord_path, test_image_list):
-    expect_size = df.FLAGS.input_image_height * df.FLAGS.input_image_width * constant.RGB_CHANNEL
     counter = 0
     test_clear_index_list = []
     for image in test_image_list:
@@ -113,47 +116,22 @@ def convert_to_tfrecord(hazed_image_list, hazed_image_file_names, dict, height, 
                     continue
                 hazed_image = im.open(image.path)
                 hazed_image = hazed_image.convert("RGB")
-                shape = np.shape(hazed_image)
-                if 0 >= shape[1] - df.FLAGS.input_image_width:
-                    left1 = left = 0
-                else:
-                    left = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
-                    left1 = np.random.randint(0, shape[1] - df.FLAGS.input_image_width)
-                right = left + df.FLAGS.input_image_width
-                right1 = left1 + df.FLAGS.input_image_width
-                if 0 >= shape[0] - df.FLAGS.input_image_height:
-                    up1 = up = 0
-                else:
-                    up = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
-                    up1 = np.random.randint(0, shape[0] - df.FLAGS.input_image_height)
-                down = up + df.FLAGS.input_image_height
-                down1 = up1 + df.FLAGS.input_image_height
-                reshape_hazed_image = hazed_image.crop((left, up, right, down))
-                if np.size(np.array(reshape_hazed_image)) != expect_size:
-                    continue
-                reshape_hazed_image1 = hazed_image.crop((left1, up1, right1, down1))
-                reshape_hazed_image_arr = np.array(reshape_hazed_image)
-                reshape_hazed_image_arr1 = np.array(reshape_hazed_image1)
+                hazed_image_shape = np.shape(hazed_image)
+                haze_height = hazed_image_shape[0]
+                haze_width = hazed_image_shape[1]
+                reshape_hazed_image_arr = np.array(hazed_image)
                 hazed_image_raw = reshape_hazed_image_arr.tostring()
-                hazed_image_raw1 = reshape_hazed_image_arr1.tostring()
                 # ################Getting corresponding clear images#########################
                 clear_image = find_corres_clear_image(image, dict)
-                reshape_clear_image = clear_image.crop((left, up, right, down))
-                if np.size(np.array(reshape_clear_image)) != expect_size:
-                    continue
-                reshape_clear_image1 = clear_image.crop((left1, up1, right1, down1))
-                reshape_clear_image_arr = np.array(reshape_clear_image)
+                reshape_clear_image_arr = np.array(clear_image)
                 clear_image_raw = reshape_clear_image_arr.tostring()
-                reshape_clear_image_arr1 = np.array(reshape_clear_image1)
-                clear_image_raw1 = reshape_clear_image_arr1.tostring()
                 example = tf.train.Example(features=tf.train.Features(feature={
                     'hazed_image_raw': bytes_feature(hazed_image_raw),
-                    'clear_image_raw': bytes_feature(clear_image_raw)}))
-                example1 = tf.train.Example(features=tf.train.Features(feature={
-                    'hazed_image_raw': bytes_feature(hazed_image_raw1),
-                    'clear_image_raw': bytes_feature(clear_image_raw1)}))
+                    'clear_image_raw': bytes_feature(clear_image_raw),
+                    'hazed_height': int64_feature(haze_height),
+                    'hazed_width': int64_feature(haze_width),
+                }))
                 writer.write(example.SerializeToString())
-                writer.write(example1.SerializeToString())
                 counter += 1
             except IOError as e:
                 raise RuntimeError('Could not read:', image.path)
@@ -173,11 +151,15 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
         features={
             'hazed_image_raw': tf.FixedLenFeature([], tf.string),
             'clear_image_raw': tf.FixedLenFeature([], tf.string),
+            'hazed_height': tf.FixedLenFeature([], tf.int64),
+            'hazed_width': tf.FixedLenFeature([], tf.int64),
         })
     hazed_image = tf.decode_raw(img_features['hazed_image_raw'], tf.uint8)
-    hazed_image = tf.reshape(hazed_image, [height, width, 3])
+    hazed_height = tf.decode_raw(img_features['hazed_height'], tf.int64)
+    hazed_width = tf.decode_raw(img_features['hazed_width'], tf.int64)
+    hazed_image = tf.reshape(hazed_image, [hazed_height, hazed_width, 3])
     clear_image = tf.decode_raw(img_features['clear_image_raw'], tf.uint8)
-    clear_image = tf.reshape(clear_image, [height, width, 3])
+    clear_image = tf.reshape(clear_image, [hazed_height, hazed_width, 3])
     # stack the haze and clear images on channel axis
     composed_images = tf.stack([hazed_image, clear_image], axis=2)
     croped_composed_images = tf.random_crop(composed_images, [df.FLAGS.input_image_height, df.FLAGS.input_image_width, 6])

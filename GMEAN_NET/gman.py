@@ -8,7 +8,6 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import threading
 import queue
 import time
 import tensorflow as tf
@@ -46,7 +45,7 @@ class TrainConsumer(threading.Thread):
     def run(self):
         config = dc.config_load_config()
         while True:
-            tfrecord_to_train = self.queue.get()
+            tfrecord_to_train = "./TFRecord/train.tfrecords"
             dmgt.train(tfrecord_to_train, self.image_number, config)
             di.input_modify_flow_control_json(df.FLAGS.train_json_path ,tfrecord_to_train)
             dc.config_update_config(config)

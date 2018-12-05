@@ -70,7 +70,7 @@ def train(tf_record_path, image_number, config):
 
         # We must calculate the mean of each gradient. Note that this is the
         # synchronization point across all towers.
-        grads = tower.average_gradients(tower_grads)
+        grads = tower.Tower.average_gradients(tower_grads)
         # Add a summary to track the learning rate.
         summaries.append(tf.summary.scalar('learning_rate', lr))
 
