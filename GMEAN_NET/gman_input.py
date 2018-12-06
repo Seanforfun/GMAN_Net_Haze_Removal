@@ -155,13 +155,13 @@ def read_tfrecords_and_add_2_queue(tfrecords_filename, batch_size, height, width
             'hazed_width': tf.FixedLenFeature([], tf.int64),
         })
     hazed_image = tf.decode_raw(img_features['hazed_image_raw'], tf.uint8)
-    hazed_height = tf.decode_raw(img_features['hazed_height'], tf.int64)
-    hazed_width = tf.decode_raw(img_features['hazed_width'], tf.int64)
+    hazed_height = tf.cast(img_features['hazed_height'], tf.int32)
+    hazed_width = tf.cast(img_features['hazed_width'], tf.int32)
     hazed_image = tf.reshape(hazed_image, [hazed_height, hazed_width, 3])
     clear_image = tf.decode_raw(img_features['clear_image_raw'], tf.uint8)
     clear_image = tf.reshape(clear_image, [hazed_height, hazed_width, 3])
     # stack the haze and clear images on channel axis
-    composed_images = tf.stack([hazed_image, clear_image], axis=2)
+    composed_images = tf.concat([hazed_image, clear_image], axis=2)
     croped_composed_images = tf.random_crop(composed_images, [df.FLAGS.input_image_height, df.FLAGS.input_image_width, 6])
     hazed_image = croped_composed_images[:, :, :3]
     clear_image = croped_composed_images[:, :, 3:]
