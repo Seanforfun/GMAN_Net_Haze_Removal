@@ -82,10 +82,13 @@ def cal_psnr(im1, im2):
     return psnr
 
 
-def eval_once(saver, train_op, hazed_image, clear_image, hazed_images_obj, placeholder, psnr_list, ssim_list, h, w):
-    with tf.Session(config=tf.ConfigProto(
+def eval_once(graph, saver, train_op, hazed_image, clear_image, hazed_images_obj, placeholder, psnr_list, ssim_list, h, w):
+    with tf.Session(graph= graph, config=tf.ConfigProto(
             allow_soft_placement=True,
-            log_device_placement=df.FLAGS.log_device_placement)) as sess:
+            log_device_placement=df.FLAGS.log_device_placement,
+            gpu_options=tf.GPUOptions(allow_growth=True,
+                                              per_process_gpu_memory_fraction=1,
+                                              visible_device_list="0"))) as sess:
         ckpt = tf.train.get_checkpoint_state(df.FLAGS.checkpoint_dir)
         if ckpt and ckpt.model_checkpoint_path:
             # Restores from checkpoint
@@ -103,35 +106,36 @@ def eval_once(saver, train_op, hazed_image, clear_image, hazed_images_obj, place
             ssim_value = measure.compare_ssim(np.uint8(dehazed_image), np.uint8(clear_image), multichannel=True)
             ssim_list.append(ssim_value)
             psnr_list.append(psnr_value)
-            print('-------------------------------------------------------------------------------------------------------------------------------')
+            logger.info('-------------------------------------------------------------------------------------------------------------------------------')
             format_str = 'image: %s PSNR: %f; SSIM: %f; (%.4f seconds)'
             logger.info(format_str % (hazed_images_obj.path, psnr_value, ssim_value, duration))
-            print('-------------------------------------------------------------------------------------------------------------------------------')
+            logger.info('-------------------------------------------------------------------------------------------------------------------------------')
         else:
             print('-------------------------------------------------------------------------------------------------------------------------------')
             format_str = 'image: %s (%.4f seconds)'
             logger.info(format_str % (hazed_images_obj.path, duration))
             print('-------------------------------------------------------------------------------------------------------------------------------')
-
+    sess.close()
 
 def evaluate():
-    with tf.Graph().as_default():
-        # A list used to save all psnr and ssim.
-        psnr_list = []
-        ssim_list = []
-        # Read all hazed images indexes and clear images from directory
-        if not df.FLAGS.eval_only_haze:
-            di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _clear_test_img_list,
-                           _clear_test_directory, clear_image=True)
-            if len(_clear_test_img_list) == 0:
-                raise RuntimeError("No image found! Please supply clear images for training or eval ")
-        # Hazed training image pre-process
-        di.image_input(df.FLAGS.haze_test_images_dir, _hazed_test_file_names, _hazed_test_img_list,
-                       clear_dict=None, clear_image=False)
-        if len(_hazed_test_img_list) == 0:
-            raise RuntimeError("No image found! Please supply hazed images for training or eval ")
+    # A list used to save all psnr and ssim.
+    psnr_list = []
+    ssim_list = []
+    # Read all hazed images indexes and clear images from directory
+    if not df.FLAGS.eval_only_haze:
+        di.image_input(df.FLAGS.clear_test_images_dir, _clear_test_file_names, _clear_test_img_list,
+                       _clear_test_directory, clear_image=True)
+        if len(_clear_test_img_list) == 0:
+            raise RuntimeError("No image found! Please supply clear images for training or eval ")
+    # Hazed training image pre-process
+    di.image_input(df.FLAGS.haze_test_images_dir, _hazed_test_file_names, _hazed_test_img_list,
+                   clear_dict=None, clear_image=False)
+    if len(_hazed_test_img_list) == 0:
+        raise RuntimeError("No image found! Please supply hazed images for training or eval ")
 
-        for image in _hazed_test_img_list:
+    for image in _hazed_test_img_list:
+        graph = tf.Graph()
+        with graph.as_default():
             # ########################################################################
             # ########################Load images from disk##############################
             # ########################################################################
@@ -157,19 +161,19 @@ def evaluate():
             saver = tf.train.Saver(variables_to_restore)
             # saver, train_op, hazed_image, clear_image_arr, hazed_images_obj, placeholder, psnr_list, ssim_list, h, w
             if not df.FLAGS.eval_only_haze:
-                eval_once(saver, logist, float_hazed_image, clear_image_arr, image, hazed_image_placeholder,
+                eval_once(graph, saver, logist, float_hazed_image, clear_image_arr, image, hazed_image_placeholder,
                           psnr_list, ssim_list, shape[0], shape[1])
             else:
-                eval_once(saver, logist, float_hazed_image, None, image, hazed_image_placeholder,
+                eval_once(graph, saver, logist, float_hazed_image, None, image, hazed_image_placeholder,
                           psnr_list, ssim_list, shape[0], shape[1])
 
-        if not df.FLAGS.eval_only_haze:
-            psnr_avg = cal_average(psnr_list)
-            format_str = '%s: Average PSNR: %5f'
-            print(format_str % (datetime.now(), psnr_avg))
-            ssim_avg = cal_average(ssim_list)
-            format_str = '%s: Average SSIM: %5f'
-            print(format_str % (datetime.now(), ssim_avg))
+    if not df.FLAGS.eval_only_haze:
+        psnr_avg = cal_average(psnr_list)
+        format_str = 'Average PSNR: %5f'
+        logger.info(format_str % psnr_avg)
+        ssim_avg = cal_average(ssim_list)
+        format_str = 'Average SSIM: %5f'
+        logger.info(format_str % ssim_avg)
 
 
 def cal_average(result_list):
