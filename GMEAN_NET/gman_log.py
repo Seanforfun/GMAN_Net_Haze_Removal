@@ -10,6 +10,9 @@ LOGGING_LEVEL = logging.INFO
 logging.basicConfig(level=LOGGING_LEVEL,format='%(asctime)s  [ %(levelname)s ]: %(message)s')
 logger = logging.getLogger(__name__)
 
+handler = logging.FileHandler("./log.txt")
+handler.setLevel(logging.INFO)
+logger.addHandler(handler)
 
 def info(message):
     logger.info(message)

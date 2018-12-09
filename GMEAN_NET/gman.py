@@ -53,16 +53,12 @@ class TrainConsumer(threading.Thread):
 
 
 def main(self):
-    image_number = len(os.listdir(df.FLAGS.haze_train_images_dir))
     thread_list = []
     daemon = threading.Thread(name='GMEAN_Daemon', daemon=True)
     thread_list.append(daemon)
     daemon.start()
     image_number = len(os.listdir(df.FLAGS.haze_train_images_dir))
     q = queue.Queue()
-    gman_producer = TrainProducer(q)
-    thread_list.append(gman_producer)
-    gman_producer.start()
     time.sleep(constant.ONE_SECOND * 10)
     gman_consumer = TrainConsumer(q, image_number)
     gman_consumer.start()

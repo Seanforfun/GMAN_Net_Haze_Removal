@@ -65,7 +65,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd):
 
 
 def conv(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], stride=[1, 1, 1, 1]):
-    with tf.variable_scope(layer_name):
+    with tf.variable_scope(layer_name, reuse=tf.AUTO_REUSE):
         w = _variable_with_weight_decay(name='weights',
                                              shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
                                              stddev=5e-2, wd=0.0)
@@ -92,7 +92,7 @@ def conv_nonacti(layer_name, x, in_channels, out_channels, kernel_size=[3, 3], s
     '''
     Layer only do the job of convolution and bias adding
     '''
-    with tf.variable_scope(layer_name):
+    with tf.variable_scope(layer_name, reuse=tf.AUTO_REUSE):
         w = tf.get_variable(name='weights_nonacti',
                             shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
                             initializer=tf.contrib.layers.xavier_initializer())
@@ -127,7 +127,7 @@ def acti_layer(x):
 
 
 def deconv(layer_name, x, in_channels, out_channels, output_shape=[32, 224, 224, 64], kernel_size=[3, 3], stride=[1, 1, 1, 1]):
-    with tf.variable_scope(layer_name):
+    with tf.variable_scope(layer_name, reuse=tf.AUTO_REUSE):
         w = tf.get_variable(name='weights',
                             shape=[kernel_size[0], kernel_size[1], in_channels, out_channels],
                             initializer=tf.contrib.layers.xavier_initializer())  # default is uniform distribution initialization
