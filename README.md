@@ -2,7 +2,6 @@
 ### Introduction
 We are using a new convolutional neural network "GMEAN" to create a End-to-end haze removal network. We feed the network hazed images and we can get the clear result directly. According to our results, we get the PSNR for 28.47dB and MSE for 0.944 on [RESIDES](https://sites.google.com/view/reside-dehaze-datasets/reside-%CE%B2) out door dataset.And our results on indoor evaluation dataset for PSNR and mse are 27.9348dB and 0.896512 repectively.GMAN is a awosome Convolutional neural network purposed on haze removal. It is a completely end-to-end dehaze system so the input to the system is hazed rgb images and the output of the system is the clear images that processed by the system. The results can be found in the [Results](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results) column, where lists our evaluation results on SOTS evaluation dataset. There lists 500 images for indoor test and 500 images for outdoor test saparately, in each file, we can also find a log.txt file showing the psnr and ssim for each images.
 
-
 ![Imgur](https://i.imgur.com/HfPpj6Q.png)
 
 ## How to use?
@@ -25,8 +24,8 @@ We are using a new convolutional neural network "GMEAN" to create a End-to-end h
 6. Step 6:
     * You results are in (PROGRAM_ROOT_PATH)/ClearResultImages.
 
-### Demonstration
-Only listed several examples, more results can be found in my [github](https://github.com/Seanforfun/Deep-Learning/tree/master/DehazeNet/Results).
+## Demonstration
+Only listed several examples, more results can be found in my [github](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results).
 #### Outdoor
 <table>
 	<tr>
@@ -91,5 +90,5 @@ Only listed several examples, more results can be found in my [github](https://g
 </table>
 
 1. Reference: [Generic Model-Agnostic Convolutional Neural Network for Single Image Dehazing](https://arxiv.org/abs/1810.02862)
-2. Code work: [GMEAN Code](https://github.com/Seanforfun/Deep-Learning/tree/master/DehazeNet)
+2. Code work: [GMEAN Code](https://github.com/Seanforfun/GMAN_Net_Haze_Removal)
 3. Co-worker: [Zheng Liu](https://github.com/MintcakeDotCom)
