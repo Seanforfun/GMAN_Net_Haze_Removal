@@ -1,7 +1,29 @@
-# Haze removal(Jan, 2018 - June, 2018)
+# GMAN(Jan, 2018 - June, 2018)
 ### Introduction
-We are using a new convolutional neural network "GMEAN" to create a End-to-end haze removal network. We feed the network hazed images and we can get the clear result directly. According to our results, we get the PSNR for 28.189dB and MSE for 0.964 on [RESIDES](https://sites.google.com/view/reside-dehaze-datasets/reside-%CE%B2) out door dataset.And our results on indoor evaluation dataset for PSNR and mse are 20.527dB and 0.8081 repectively.
+We are using a new convolutional neural network "GMEAN" to create a End-to-end haze removal network. We feed the network hazed images and we can get the clear result directly. According to our results, we get the PSNR for 28.47dB and MSE for 0.944 on [RESIDES](https://sites.google.com/view/reside-dehaze-datasets/reside-%CE%B2) out door dataset.And our results on indoor evaluation dataset for PSNR and mse are 27.9348dB and 0.896512 repectively.GMAN is a awosome Convolutional neural network purposed on haze removal. It is a completely end-to-end dehaze system so the input to the system is hazed rgb images and the output of the system is the clear images that processed by the system. The results can be found in the [Results](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results) column, where lists our evaluation results on SOTS evaluation dataset. There lists 500 images for indoor test and 500 images for outdoor test saparately, in each file, we can also find a log.txt file showing the psnr and ssim for each images.
+
+
 ![Imgur](https://i.imgur.com/HfPpj6Q.png)
+
+## How to use?
+1. Step 1:
+    * You need to install all packages required by the program, such as tensorflow(GPU version), numpy etc.
+    * You need to download current repository into your local environment and extract it.
+2. Step 2:
+    * Go to your local file and enter the setup.sh file. Change the line 14, "PROGRAM_ROOT_PATH=''" to the path you want.
+    * Run ```sh setup.sh```, it will automatically create the directories for running the program
+
+### Evaluate your own image
+3. Step 3:
+    * Move the hazed images to (PROGRAM_ROOT_PATH)/HazeImages/TestImages.
+    * If you have ground truth images to compare with the pictures processed by the net, move them to (PROGRAM_ROOT_PATH)/ClearImages/TestImages.
+4. Step 4:
+    * Copy the model from (DOWNLOAD FILE)/Results/models/(outdoor or indoor) to (PROGRAM_ROOT_PATH)/DeHazeNetModel
+5. Step 5:
+    * If you want to compare the result with groundtruth, you just need to run the program by using ```python3 gman_eval.py```.
+    * If you don't have ground truth, you can can run the program by using ```python3 gman_eval.py --eval_only_haze=True```.
+6. Step 6:
+    * You results are in (PROGRAM_ROOT_PATH)/ClearResultImages.
 
 ### Demonstration
 Only listed several examples, more results can be found in my [github](https://github.com/Seanforfun/Deep-Learning/tree/master/DehazeNet/Results).

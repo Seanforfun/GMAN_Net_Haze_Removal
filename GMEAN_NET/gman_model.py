@@ -16,8 +16,9 @@ class Model(metaclass=abc.ABCMeta):
         pass
 
 
-# This model is the version that we start training from Dec, 2018,
-# Designed by Zheng Liu.
+# This model consists with the one metioned in paper
+# Generic Model-Agnostic Convolutional Neural Network for Single Image Dehazing
+# https://arxiv.org/ptools/1810.02862.ptools
 class GMAN_V1(Model):
 
     def inference(self, input_data, batch_size=None, h=None, w=None):
@@ -107,9 +108,6 @@ class GMAN_V1(Model):
             return x_r
 
 
-# This model consists with the one metioned in paper
-# Generic Model-Agnostic Convolutional Neural Network for Single Image Dehazing
-# https://arxiv.org/ptools/1810.02862.ptools
 class GMAN(Model):
     def __init__(self):
         pass

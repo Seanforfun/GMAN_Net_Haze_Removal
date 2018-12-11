@@ -151,7 +151,7 @@ def evaluate():
                 clear_image_arr = np.array(clear_image)
 
             # ########################################################################
-            # ###################Restore model and do evaluations##########################
+            # ###################Restore model and do evaluations#####################
             # ########################################################################
             gman = model.GMAN_V1()
             logist = gman.inference(hazed_image_placeholder, batch_size=1, h=shape[0], w=shape[1])

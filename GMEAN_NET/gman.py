@@ -59,7 +59,6 @@ def main(self):
     daemon.start()
     image_number = len(os.listdir(df.FLAGS.haze_train_images_dir))
     q = queue.Queue()
-    time.sleep(constant.ONE_SECOND * 10)
     gman_consumer = TrainConsumer(q, image_number)
     gman_consumer.start()
     thread_list.append(gman_consumer)

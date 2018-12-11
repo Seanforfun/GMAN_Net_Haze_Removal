@@ -5,9 +5,11 @@
 #  ====================================================
 import os
 import json
+import tensorflow as tf
 
 import gman_log as logger
 import gman_constant as constants
+import gman_flags as flags
 
 
 class LearningRate(object):
@@ -20,6 +22,7 @@ class LearningRate(object):
         self.decay_factor = constants.LEARNING_RATE_DECAY_FACTOR
 
     def save(self, current_learning_rate):
+        current_learning_rate = str(current_learning_rate)
         if not os.path.exists(self.path):
             logger.info("Create Json file for learning rate.")
         learning_rate_file = open(self.path, "w")
@@ -30,7 +33,7 @@ class LearningRate(object):
             raise RuntimeError("[Error]: Error happens when read/write " + self.path + ".")
         finally:
             learning_rate_file.close()
-        return learning_rate["learning_rate"]
+        return float(learning_rate["learning_rate"])
 
     def load(self):
             if not os.path.exists(self.path):
@@ -42,11 +45,14 @@ class LearningRate(object):
                     learning_rate_map = json.load(learning_rate_file)
                     learning_rate = learning_rate_map["learning_rate"]
                 except IOError as err:
-                    raise RuntimeError("[Error]: Error happens when read/write " + df.FLAGS.train_json_path + ".")
+                    raise RuntimeError("[Error]: Error happens when read/write " + flags.FLAGS.train_json_path + ".")
                 finally:
                     learning_rate_file.close()
-                return learning_rate
+                return float(learning_rate)
 
     def update(self, current_learning_rate):
-        self.save(self, current_learning_rate)
+        self.save(current_learning_rate)
 
+
+if __name__ == '__main__':
+     pass
