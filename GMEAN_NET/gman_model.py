@@ -36,18 +36,21 @@ class GMAN_V1(Model):
             batch_size = flags.FLAGS.batch_size
         with tf.variable_scope('DehazeNet'):
             x_s = input_data
+            # ####################################################################
+            # #####################Two convolutional layers###########################
+            # ####################################################################
             x = tools.conv('DN_conv1_1', x_s, 3, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
             x = tools.conv('DN_conv1_2', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
 
-            # with tf.name_scope('pool1'):
-            #     x = tools.pool('pool1', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
-            #
-            # with tf.name_scope('pool2'):
-            #     x = tools.pool('pool2', x, kernel=[1, 2, 2, 1], stride=[1, 2, 2, 1], is_max_pool=True)
-
+            # ####################################################################
+            # ###################Two Downsampling layers############################
+            # ####################################################################
             x = tools.conv('upsampling_1', x, 64, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
             x = tools.conv('upsampling_2', x, 128, 128, kernel_size=[3, 3], stride=[1, 2, 2, 1])
 
+            # ####################################################################
+            # #######################Residual Blocks#################################
+            # ####################################################################
             x1 = tools.conv('DN_conv2_1', x, 128, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
             x = tools.conv('DN_conv2_2', x1, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
             x = tools.conv_nonacti('DN_conv2_3', x, 64, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
@@ -86,20 +89,11 @@ class GMAN_V1(Model):
             # x = tools.batch_norm(x)
             x = tools.acti_layer(x)
 
-            # x5 = tools.conv('DN_conv5_6', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-            # x = tools.conv('DN_conv5_7', x5, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-            # x = tools.conv_nonacti('DN_conv5_8', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-            # x = tf.add(x, x5)
-            # x = tools.acti_layer(x)
-
+            # ####################################################################
+            # #####################Two deconvolutional layers#########################
+            # ####################################################################
             x = tools.deconv('DN_deconv1', x, 64, 64, output_shape=[batch_size, int((h + 1)/2), int((w + 1)/2), 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
             x = tools.deconv('DN_deconv2', x, 64, 64, output_shape=[batch_size, h, w, 64], kernel_size=[3, 3], stride=[1, 2, 2, 1])
-
-            # x = tools.conv('DN_conv6_1', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-            # x = tools.conv('DN_conv6_1', x, 64, kernel_size=[3, 3], stride=[1, 1, 1, 1])
-            # x = tf.add(x, x_s)
-            # # # x = tools.batch_norm(x)
-            # x = tools.acti_layer(x)
 
             x_r = tools.conv_nonacti('DN_conv7_1', x, 64, 3, kernel_size=[3, 3], stride=[1, 1, 1, 1])
             x_r = tf.add(x_r, x_s)
