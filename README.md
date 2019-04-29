@@ -1,6 +1,6 @@
 # GMAN(Jan, 2018 - June, 2018 & Dec, 2018 - Now)
 ### Introduction
-GMAN is a awosome Convolutional neural network purposed on haze removal. It is a completely end-to-end dehaze system so the input to the system is hazed rgb images and the output of the system is the clear images that processed by the system. The results can be found in the [Results](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results) column, where lists our evaluation results on SOTS evaluation dataset. There lists 500 images for indoor test and 500 images for outdoor test saparately, in each file, we can also find a log.txt file showing the psnr and ssim for each images.
+GMAN is a awesome Convolutional neural network purposed on haze removal. It is a completely end-to-end dehaze system so the input to the system is hazed rgb images and the output of the system is the clear images that processed by the system. The results can be found in the [Results](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results) column, where lists our evaluation results on SOTS evaluation dataset. There lists 500 images for indoor test and 500 images for outdoor test saparately, in each file, we can also find a log.txt file showing the psnr and ssim for each images.
 
 | Dateset | PSNR(dB) | SSIM | Model Path | Link to result |
 | :-: | :-: | :-: |  :-: | :-: |
@@ -97,3 +97,18 @@ Only listed several examples, more results can be found in my [github](https://g
 1. Reference: [Generic Model-Agnostic Convolutional Neural Network for Single Image Dehazing](https://arxiv.org/abs/1810.02862)
 2. Code work: [GMEAN Code](https://github.com/Seanforfun/GMAN_Net_Haze_Removal)
 3. Co-worker: [Zheng Liu](https://github.com/MintcakeDotCom)
+
+### Citation
+Please cite the paper if you are using this project.
+```
+@article{liu2019single,
+  title={Single Image Dehazing with a Generic Model-Agnostic Convolutional Neural Network},
+  author={Liu, Zheng and Xiao, Botao and Alrabeiah, Muhammad and Wang, Keyan and Chen, Jun},
+  journal={IEEE Signal Processing Letters},
+  volume={26},
+  number={6},
+  pages={833--837},
+  year={2019},
+  publisher={IEEE}
+}
+```
