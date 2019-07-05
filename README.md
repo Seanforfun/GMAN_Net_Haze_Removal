@@ -4,8 +4,8 @@ GMAN is a awesome Convolutional neural network purposed on haze removal. It is a
 
 | Dateset | PSNR(dB) | SSIM | Model Path | Link to result |
 | :-: | :-: | :-: |  :-: | :-: |
-| SOTS outdoor | 28.474217 | 0.944434 | [click me](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results/models/outdoor) | [click me](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results/Outdoor) |
-| SOTS indoor | 27.934801 | 0.896512 | [click me](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results/models/indoor) | [click me](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results/Indoor) |
+| SOTS outdoor | 28.474217 | 0.944434 | [click me](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results/models/outdoor) | [click me](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results/SOTSOutdoor) |
+| SOTS indoor | 27.934801 | 0.896512 | [click me](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results/models/indoor) | [click me](https://github.com/Seanforfun/GMAN_Net_Haze_Removal/tree/master/Results/SOTSIndoor) |
 
 ![Imgur](https://i.imgur.com/HfPpj6Q.png)
 
@@ -94,10 +94,6 @@ Only listed several examples, more results can be found in my [github](https://g
 	</tr>	
 </table>
 
-1. Reference: [Generic Model-Agnostic Convolutional Neural Network for Single Image Dehazing](https://arxiv.org/abs/1810.02862)
-2. Code work: [GMEAN Code](https://github.com/Seanforfun/GMAN_Net_Haze_Removal)
-3. Co-worker: [Zheng Liu](https://github.com/MintcakeDotCom)
-
 ### Citation
 Please cite the paper if you are using this project.
 ```
@@ -112,3 +108,6 @@ Please cite the paper if you are using this project.
   publisher={IEEE}
 }
 ```
+
+### More
+More of my Deep learning projects, please have a look at my website.[Deep Learning Projects](https://seanforfun.github.io/DeepLearning/)
